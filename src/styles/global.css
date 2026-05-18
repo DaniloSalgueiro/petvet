@@ -1,0 +1,435 @@
+/* =========================================================
+   PETVET — CSS GLOBAL
+   Design tokens + Reset + Regras definitivas de botões
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   1. DESIGN TOKENS — MODO CLARO (padrão)
+   --------------------------------------------------------- */
+:root {
+  /* Marca */
+  --teal: #27B5AC;
+  --teal-dark: #1d8f88;
+  --teal-light: #d4f0ee;
+  --magenta: #DE098D;
+  --magenta-dark: #b5076f;
+  --magenta-light: #fce4f3;
+
+  /* Superfícies */
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #f0f2f4;
+  --border: #e2e6ea;
+  --border-strong: #c8cdd3;
+
+  /* Texto — explícitos para não vazar em botões */
+  --text-primary: #1a1f27;
+  --text-secondary: #4a5568;
+  --text-muted: #7a8699;
+  --text-on-brand: #ffffff;   /* texto sobre teal ou magenta */
+
+  /* Estados */
+  --danger: #e53e3e;
+  --danger-dark: #c53030;
+  --success: #38a169;
+  --warning: #d69e2e;
+  --info: #3182ce;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* Layout */
+  --sidebar-width: 240px;
+  --header-height: 60px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* Transições */
+  --transition: 150ms ease;
+}
+
+/* ---------------------------------------------------------
+   2. DESIGN TOKENS — MODO ESCURO
+   --------------------------------------------------------- */
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --surface: #1a1f2e;
+  --surface-2: #242938;
+  --border: #2d3347;
+  --border-strong: #3d4460;
+
+  --text-primary: #f0f2f5;
+  --text-secondary: #a8b2c8;
+  --text-muted: #6b7a9a;
+  --text-on-brand: #ffffff;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------------------------------------------------------
+   3. RESET
+   --------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+h1, h2, h3, h4, .serif {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+a {
+  color: var(--teal);
+  text-decoration: none;
+}
+
+img, svg {
+  display: block;
+  max-width: 100%;
+}
+
+input, textarea, select, button {
+  font: inherit;
+}
+
+/* ---------------------------------------------------------
+   4. BOTÕES — REGRAS DEFINITIVAS
+   Problema anterior: cor do texto herdava do tema no modo claro,
+   tornando texto escuro sobre fundo escuro (teal/magenta).
+   Solução: cor explícita em TODAS as variantes, nunca herdada.
+   --------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    color var(--transition),
+    box-shadow var(--transition),
+    opacity var(--transition);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.btn:focus-visible {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* --- Primário (teal) ------------------------------------ */
+.btn-primary {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #ffffff;           /* NUNCA herdar — sempre branco */
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--teal-dark);
+  border-color: var(--teal-dark);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:active:not(:disabled) {
+  background: #176f6a;
+  border-color: #176f6a;
+  color: #ffffff;
+}
+
+/* --- Accent (magenta) ----------------------------------- */
+.btn-accent {
+  background: var(--magenta);
+  border-color: var(--magenta);
+  color: #ffffff;           /* NUNCA herdar — sempre branco */
+}
+.btn-accent:hover:not(:disabled) {
+  background: var(--magenta-dark);
+  border-color: var(--magenta-dark);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+.btn-accent:active:not(:disabled) {
+  background: #8c0557;
+  border-color: #8c0557;
+  color: #ffffff;
+}
+
+/* --- Outline teal --------------------------------------- */
+.btn-outline {
+  background: transparent;
+  border-color: var(--teal);
+  color: var(--teal);       /* cor da marca, não do tema */
+}
+.btn-outline:hover:not(:disabled) {
+  background: var(--teal-light);
+  color: var(--teal-dark);
+  border-color: var(--teal-dark);
+}
+[data-theme="dark"] .btn-outline:hover:not(:disabled) {
+  background: rgba(39, 181, 172, 0.15);
+  color: var(--teal);
+}
+.btn-outline:active:not(:disabled) {
+  background: var(--teal-light);
+}
+
+/* --- Outline magenta ------------------------------------ */
+.btn-outline-accent {
+  background: transparent;
+  border-color: var(--magenta);
+  color: var(--magenta);
+}
+.btn-outline-accent:hover:not(:disabled) {
+  background: var(--magenta-light);
+  color: var(--magenta-dark);
+  border-color: var(--magenta-dark);
+}
+[data-theme="dark"] .btn-outline-accent:hover:not(:disabled) {
+  background: rgba(222, 9, 141, 0.15);
+  color: var(--magenta);
+}
+
+/* --- Ghost (sem borda) ---------------------------------- */
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+/* --- Danger --------------------------------------------- */
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #ffffff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-dark);
+  border-color: var(--danger-dark);
+  color: #ffffff;
+}
+
+/* --- Outline Danger ------------------------------------- */
+.btn-outline-danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.btn-outline-danger:hover:not(:disabled) {
+  background: #fff5f5;
+  color: var(--danger-dark);
+}
+[data-theme="dark"] .btn-outline-danger:hover:not(:disabled) {
+  background: rgba(229, 62, 62, 0.15);
+  color: var(--danger);
+}
+
+/* --- Tamanhos ------------------------------------------- */
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  gap: 6px;
+}
+.btn-lg {
+  padding: 12px 24px;
+  font-size: 1rem;
+}
+.btn-icon {
+  padding: 8px;
+  border-radius: var(--radius-sm);
+}
+.btn-full {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------
+   5. UTILITÁRIOS GERAIS
+   --------------------------------------------------------- */
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.badge-teal    { background: var(--teal-light);    color: var(--teal-dark); }
+.badge-magenta { background: var(--magenta-light);  color: var(--magenta-dark); }
+.badge-success { background: #c6f6d5; color: #276749; }
+.badge-danger  { background: #fed7d7; color: #9b2c2c; }
+.badge-warning { background: #fefcbf; color: #744210; }
+.badge-neutral { background: var(--surface-2); color: var(--text-secondary); }
+
+[data-theme="dark"] .badge-teal    { background: rgba(39,181,172,0.2); color: #4dd8d0; }
+[data-theme="dark"] .badge-magenta { background: rgba(222,9,141,0.2);  color: #f06dbe; }
+[data-theme="dark"] .badge-success { background: rgba(56,161,105,0.2); color: #68d391; }
+[data-theme="dark"] .badge-danger  { background: rgba(229,62,62,0.2);  color: #fc8181; }
+[data-theme="dark"] .badge-warning { background: rgba(214,158,46,0.2); color: #f6e05e; }
+[data-theme="dark"] .badge-neutral { background: var(--surface-2);     color: var(--text-muted); }
+
+/* Form elements */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 9px 12px;
+  font-size: 0.875rem;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  width: 100%;
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(39, 181, 172, 0.18);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 90px;
+}
+
+/* Divider */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* =========================================================
+   IMPRESSÃO — @media print
+   ========================================================= */
+@media print {
+  .sidebar,
+  .header,
+  .no-print { display: none !important; }
+
+  .print-only { display: block !important; }
+
+  .app-shell { display: block !important; }
+
+  .main-content {
+    margin-left: 0 !important;
+    padding-top: 0 !important;
+    width: 100% !important;
+  }
+
+  body, html {
+    background: #fff !important;
+    color: #000 !important;
+    font-size: 11pt !important;
+  }
+
+  .page {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+  }
+
+  input, select, textarea {
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  button { display: none !important; }
+
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ddd; padding: 6px 10px; font-size: 10pt; }
+
+  @page {
+    size: A4;
+    margin: 15mm 20mm;
+  }
+}
