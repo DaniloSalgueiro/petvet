@@ -2947,12 +2947,29 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
     { id: 'vp7', species: 'Gato', name: 'FeLV – Leucemia Felina',  doses: 2, intervalDays: 21,  annualBooster: true, minAgeMonths: 3 },
   ]
 
-  const emptyRow = () => ({ vacina: '', fabricante: '', lote: '', validadeFrasco: '', dose: '1ª dose', via: 'SC' })
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const emptyRow = () => ({ vacina: '', fabricante: '', lote: '', dataAplicacao: todayIso, validade: '', dose: '1ª dose', via: 'SC' })
+
+  function calcNextBooster(dateStr, proto) {
+    if (!dateStr || !proto) return ''
+    const d = new Date(dateStr + 'T00:00')
+    if (proto.annualBooster) d.setFullYear(d.getFullYear() + 1)
+    else if (proto.intervalDays) d.setDate(d.getDate() + proto.intervalDays)
+    else return ''
+    return d.toISOString().slice(0, 10)
+  }
 
   function addRow() { onChange([...vacinasAplicadas, emptyRow()]) }
   function removeRow(i) { onChange(vacinasAplicadas.filter((_, idx) => idx !== i)) }
   function updateRow(i, key, val) {
-    const arr = [...vacinasAplicadas]; arr[i] = { ...arr[i], [key]: val }; onChange(arr)
+    const arr = [...vacinasAplicadas]
+    arr[i] = { ...arr[i], [key]: val }
+    if (key === 'dataAplicacao' || key === 'vacina') {
+      const r = arr[i]
+      const proto = allProtocols.find(p => p.name === r.vacina)
+      arr[i].proximoReforco = calcNextBooster(r.dataAplicacao, proto)
+    }
+    onChange(arr)
   }
 
   const petApps = petId ? (applications.length > 0 ? applications : []).filter(a => a.petId === petId) : []
@@ -2998,7 +3015,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '12px 0' }}>Nenhuma vacina aplicada nesta consulta.</p>
         )}
         {vacinasAplicadas.map((row, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 8, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 8, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Vacina</label>
               <select className="form-select" value={row.vacina} onChange={e => updateRow(i, 'vacina', e.target.value)} disabled={isReadOnly}>
@@ -3008,7 +3025,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
               </select>
             </div>
             {row.vacina === 'Outra' || !allProtocols.find(p => p.name === row.vacina) ? (
-              <div className="form-group" style={{ margin: 0, gridColumn: row.vacina === 'Outra' ? 'span 1' : undefined }}>
+              <div className="form-group" style={{ margin: 0 }}>
                 <label className="form-label" style={{ fontSize: '0.75rem' }}>Nome</label>
                 <input className="form-input" value={row.vacinaOutra ?? ''} onChange={e => updateRow(i, 'vacinaOutra', e.target.value)} disabled={isReadOnly} />
               </div>
@@ -3022,8 +3039,17 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
               <input className="form-input" value={row.lote} onChange={e => updateRow(i, 'lote', e.target.value)} disabled={isReadOnly} />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label" style={{ fontSize: '0.75rem' }}>Val. frasco</label>
-              <input type="date" className="form-input" value={row.validadeFrasco} onChange={e => updateRow(i, 'validadeFrasco', e.target.value)} disabled={isReadOnly} />
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>Data aplicação</label>
+              <input type="date" className="form-input" value={row.dataAplicacao ?? ''} onChange={e => updateRow(i, 'dataAplicacao', e.target.value)} disabled={isReadOnly} />
+              {row.proximoReforco && (
+                <span style={{ fontSize: '0.68rem', color: 'var(--success,#4CAF50)', display: 'block', marginTop: 3 }}>
+                  Reforço: {new Date(row.proximoReforco + 'T00:00').toLocaleDateString('pt-BR')}
+                </span>
+              )}
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>Validade</label>
+              <input type="date" className="form-input" value={row.validade ?? row.validadeFrasco ?? ''} onChange={e => updateRow(i, 'validade', e.target.value)} disabled={isReadOnly} />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Dose</label>
@@ -3078,7 +3104,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
           <h4 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Histórico de vacinas</h4>
           <div className="table-wrapper" style={{ maxHeight: 240 }}>
             <table>
-              <thead><tr><th>Data</th><th>Vacina</th><th>Dose</th><th>Lote</th><th>Veterinário</th></tr></thead>
+              <thead><tr><th>Data</th><th>Vacina</th><th>Dose</th><th>Lote</th><th>Validade</th><th>Veterinário</th></tr></thead>
               <tbody>
                 {history.map(app => (
                   <tr key={app.id}>
@@ -3086,6 +3112,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
                     <td>{app.proto?.name}</td>
                     <td>{app.dose}ª dose</td>
                     <td>{app.lot || '—'}</td>
+                    <td>{app.validade ? new Date(app.validade + 'T00:00').toLocaleDateString('pt-BR') : app.validadeFrasco ? new Date(app.validadeFrasco + 'T00:00').toLocaleDateString('pt-BR') : '—'}</td>
                     <td>{app.vet || '—'}</td>
                   </tr>
                 ))}
@@ -3424,9 +3451,12 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
             )}
             {activeModal === 'atestado-vacinacao' && (
               <>
+                {(form.vacinasAplicadas ?? []).length === 0 && (
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '0 0 8px' }}>Nenhuma vacina registrada neste prontuário. As vacinas da aba Vacinas serão exibidas automaticamente.</p>
+                )}
                 <div className="form-group">
-                  <label className="form-label">Vacinas aplicadas</label>
-                  <textarea className="form-textarea" style={{ minHeight: 80 }} value={termoData.vacinasAtestado} onChange={e => setTermoData(d => ({ ...d, vacinasAtestado: e.target.value }))} placeholder="Ex: V10 (lote 12345, val. 03/2027), Antirrábica (lote AB200, val. 05/2027)..." />
+                  <label className="form-label">Observações adicionais</label>
+                  <textarea className="form-textarea" style={{ minHeight: 60 }} value={termoData.vacinasAtestado} onChange={e => setTermoData(d => ({ ...d, vacinasAtestado: e.target.value }))} placeholder="Informações complementares (opcional)..." />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Validade do atestado</label>
@@ -3572,11 +3602,11 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
                     <tbody>
                       {(form.vacinasAplicadas ?? []).length > 0 ? (form.vacinasAplicadas ?? []).map((v, idx) => (
                         <tr key={idx}>
-                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.nomeVacina ?? v.protocolo ?? '—'}</td>
+                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.vacina === 'Outra' ? (v.vacinaOutra ?? '—') : (v.vacina ?? v.nomeVacina ?? '—')}</td>
                           <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.fabricante ?? '—'}</td>
                           <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.lote ?? '—'}</td>
                           <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.dataAplicacao ? new Date(v.dataAplicacao + 'T00:00').toLocaleDateString('pt-BR') : '—'}</td>
-                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.proximaDose ? new Date(v.proximaDose + 'T00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.proximoReforco ? new Date(v.proximoReforco + 'T00:00').toLocaleDateString('pt-BR') : (v.validade ?? v.validadeFrasco) ? new Date((v.validade ?? v.validadeFrasco) + 'T00:00').toLocaleDateString('pt-BR') : '—'}</td>
                         </tr>
                       )) : (
                         <tr><td colSpan={5} style={{ border: '1px solid #ccc', padding: '6px 8px', color: '#888', textAlign: 'center' }}>Sem vacinas registradas neste prontuário</td></tr>
@@ -3593,7 +3623,29 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
               {activeModal === 'atestado-vacinacao' && (
                 <>{qualAnimal}{qualTutor}
                   <p>Atesto que o animal acima identificado recebeu as seguintes vacinas conforme protocolo vacinal:</p>
-                  <p style={{ whiteSpace: 'pre-line' }}><strong>Vacinas:</strong> {termoData.vacinasAtestado || '______________________'}</p>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', marginBottom: 12 }}>
+                    <thead>
+                      <tr style={{ background: '#f0f0f0' }}>
+                        {['Vacina', 'Fabricante', 'Lote', 'Data Aplicação', 'Validade'].map(h => (
+                          <th key={h} style={{ border: '1px solid #ccc', padding: '4px 8px', textAlign: 'left' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(form.vacinasAplicadas ?? []).length > 0 ? (form.vacinasAplicadas ?? []).map((v, idx) => (
+                        <tr key={idx}>
+                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.vacina === 'Outra' ? (v.vacinaOutra ?? '—') : (v.vacina ?? '—')}</td>
+                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.fabricante ?? '—'}</td>
+                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.lote ?? '—'}</td>
+                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.dataAplicacao ? new Date(v.dataAplicacao + 'T00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                          <td style={{ border: '1px solid #ccc', padding: '4px 8px' }}>{v.proximoReforco ? new Date(v.proximoReforco + 'T00:00').toLocaleDateString('pt-BR') : (v.validade ?? v.validadeFrasco) ? new Date((v.validade ?? v.validadeFrasco) + 'T00:00').toLocaleDateString('pt-BR') : '—'}</td>
+                        </tr>
+                      )) : (
+                        <tr><td colSpan={5} style={{ border: '1px solid #ccc', padding: '6px 8px', color: '#888', textAlign: 'center' }}>Sem vacinas registradas neste prontuário</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                  {termoData.vacinasAtestado && <p style={{ whiteSpace: 'pre-line' }}><strong>Observações:</strong> {termoData.vacinasAtestado}</p>}
                   {termoData.validadeAtestado && <p><strong>Validade deste atestado:</strong> {termoData.validadeAtestado}</p>}
                   {footerSoVet}
                 </>

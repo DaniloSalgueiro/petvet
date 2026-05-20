@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Users, FileText, Calendar,
   Package, Scissors, DollarSign, UserCog, LogOut, ShoppingCart, Syringe,
-  Briefcase, Settings, Tag, Pill,
+  Briefcase, Settings, Tag, Pill, BarChart2,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { id: 'vacinaprotocolo',  label: 'Vacinas',           icon: Syringe },
   { id: 'bulario',          label: 'Bulário',           icon: Pill },
   { id: 'financeiro',       label: 'Financeiro',        icon: DollarSign },
+  { id: 'relatorios',       label: 'Relatórios',        icon: BarChart2 },
 ]
 
 const ADMIN_ITEMS = [

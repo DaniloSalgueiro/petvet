@@ -19,6 +19,7 @@ import FuncionariosPage from './pages/Funcionarios'
 import ProntuarioConfigPage from './pages/ProntuarioConfig'
 import RacasPage from './pages/Racas'
 import BularioPage from './pages/Bulario'
+import RelatoriosPage from './pages/Relatorios'
 
 function AppShell() {
   const { user, mustChangePassword } = useAuth()
@@ -60,6 +61,7 @@ function PageRouter({ page, navParams, navigateTo }) {
     case 'prontuario-config': return <ProntuarioConfigPage />
     case 'racas':             return <RacasPage />
     case 'bulario':           return <BularioPage />
+    case 'relatorios':        return <RelatoriosPage />
     default:                  return <Dashboard navigateTo={navigateTo} />
   }
 }
