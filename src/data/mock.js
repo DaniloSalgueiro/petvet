@@ -215,12 +215,16 @@ export function getTutorById(id) { return TUTORES.find(t => t.id === id) }
 export function getVetById(id) { return VETS.find(v => v.id === id) }
 export function getUserById(id) { return USUARIOS.find(u => u.id === id) }
 export function getPetAge(birthDate) {
-  const birth = new Date(birthDate)
-  const now = new Date('2026-05-14')
-  const years = now.getFullYear() - birth.getFullYear()
-  const months = now.getMonth() - birth.getMonth()
-  if (years === 0) return `${months + (months < 0 ? 12 : 0)}m`
-  return `${years}a`
+  if (!birthDate) return '—'
+  const birth = new Date(birthDate + 'T00:00')
+  const now = new Date()
+  let years = now.getFullYear() - birth.getFullYear()
+  let months = now.getMonth() - birth.getMonth()
+  const days = now.getDate() - birth.getDate()
+  if (days < 0) months--
+  if (months < 0) { years--; months += 12 }
+  if (years === 0 && months === 0) return 'menos de 1 mês'
+  return `${years}a ${months}m`
 }
 export function getDaysUntilExpiry(dateStr) {
   const expiry = new Date(dateStr)

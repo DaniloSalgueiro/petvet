@@ -1,7 +1,8 @@
 import { useState, useMemo, useRef } from 'react'
 import { Search, Plus, ChevronRight, X, Edit2, AlertCircle, Loader2, Sparkles, Trash2 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
-import { PETS, TUTORES, AGENDAMENTOS, PRONTUARIOS, getPetAge, getTutorById } from '../data/mock'
+import { PETS, TUTORES, AGENDAMENTOS, PRONTUARIOS, getTutorById } from '../data/mock'
+import { calcularIdade } from '../utils/calcularIdade'
 import { useAuth } from '../context/AuthContext'
 import { normIncludes, norm } from '../utils/normalizeText'
 import { useAISearch } from '../hooks/useAISearch'
@@ -42,7 +43,7 @@ const EMPTY_PET = {
   vermifugacao: 'Em dia', castrado: 'Não', planoSaude: 'Não', planoNome: '',
   planoCarteirinha: '', foto: null,
 }
-const EMPTY_TUTOR = { name: '', cpf: '', phone: '', email: '', address: '' }
+const EMPTY_TUTOR = { name: '', cpf: '', rg: '', phone: '', email: '', address: '' }
 
 export default function PetsPage({ navigateTo, navParams }) {
   const { hasRole } = useAuth()
@@ -141,7 +142,8 @@ export default function PetsPage({ navigateTo, navParams }) {
   return (
     <>
       {view === 'detail' && selectedPet ? (
-        <PetDetail pet={selectedPet} tutores={tutores} onBack={() => setView('list')} onEdit={() => openEditPet(selectedPet)} hasRole={hasRole} navigateTo={navigateTo} onDeleteTutor={setDeleteTutorTarget} onDeletePet={setDeleteTarget} />
+        <PetDetail pet={selectedPet} tutores={tutores} onBack={() => setView('list')} onEdit={() => openEditPet(selectedPet)} hasRole={hasRole} navigateTo={navigateTo} onDeleteTutor={setDeleteTutorTarget} onDeletePet={setDeleteTarget}
+          onEditTutor={t => { setEditingTutor(t); setTutorForm({ ...EMPTY_TUTOR, ...t }); setTutorDupWarn(''); setShowTutorModal(true) }} />
       ) : (
       <div className="page">
         <div className="page-header">
@@ -188,13 +190,14 @@ export default function PetsPage({ navigateTo, navParams }) {
             ) : (
               <div className="table-wrapper">
                 <table>
-                  <thead><tr><th>Nome</th><th>CPF</th><th>Telefone</th><th>E-mail</th><th>Pets</th><th></th></tr></thead>
+                  <thead><tr><th>Nome</th><th>RG</th><th>CPF</th><th>Telefone</th><th>E-mail</th><th>Pets</th><th></th></tr></thead>
                   <tbody>
                     {tutoresFiltrados.map(t => {
                       const petCount = pets.filter(p => p.tutorId === t.id).length
                       return (
                         <tr key={t.id}>
                           <td style={{ fontWeight: 600 }}>{t.name}</td>
+                          <td>{t.rg || '—'}</td>
                           <td>{t.cpf || '—'}</td>
                           <td>{t.phone || '—'}</td>
                           <td>{t.email || '—'}</td>
@@ -266,7 +269,7 @@ export default function PetsPage({ navigateTo, navParams }) {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>{pet.name}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>• {getPetAge(pet.birthDate)}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>• {calcularIdade(pet.birthDate)}</span>
                       </div>
                       <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 1 }}>{pet.breed} · {SEX_LABEL[pet.sex]}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>Tutor: {tutor?.name ?? '—'}</div>
@@ -434,10 +437,14 @@ export default function PetsPage({ navigateTo, navParams }) {
             <label className="form-label">Nome completo *</label>
             <input className="form-input" value={tutorForm.name} onChange={e => setTutorForm(f => ({ ...f, name: e.target.value }))} placeholder="Nome do responsável" />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
             <div className="form-group">
               <label className="form-label">CPF</label>
               <input className="form-input" value={tutorForm.cpf} onChange={e => setTutorForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">RG</label>
+              <input className="form-input" value={tutorForm.rg ?? ''} onChange={e => setTutorForm(f => ({ ...f, rg: e.target.value }))} placeholder="00.000.000-0" />
             </div>
             <div className="form-group">
               <label className="form-label">Telefone</label>
@@ -484,7 +491,7 @@ export default function PetsPage({ navigateTo, navParams }) {
 }
 
 // ---- PET DETAIL ----
-function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDeleteTutor, onDeletePet }) {
+function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDeleteTutor, onDeletePet, onEditTutor }) {
   const tutor = tutores.find(t => t.id === pet.tutorId)
   const consultas = AGENDAMENTOS.filter(a => a.petId === pet.id).sort((a, b) => b.date.localeCompare(a.date))
   const pronts = PRONTUARIOS.filter(p => p.petId === pet.id)
@@ -495,7 +502,7 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
           <button className="btn btn-ghost btn-sm" onClick={onBack}>← Voltar</button>
           <div>
             <h2 className="page-title">{SPECIES_ICON[pet.species] ?? '🐾'} {pet.name}</h2>
-            <p className="page-subtitle">{pet.breed} · {pet.species} · {getPetAge(pet.birthDate)}</p>
+            <p className="page-subtitle">{pet.breed} · {pet.species} · {calcularIdade(pet.birthDate)}</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -523,6 +530,9 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
             )}
             <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>Informações do Pet</h3>
           </div>
+          <InfoRow label="Espécie" value={pet.species} />
+          <InfoRow label="Raça" value={pet.breed || '—'} />
+          <InfoRow label="Idade" value={calcularIdade(pet.birthDate)} />
           <InfoRow label="Sexo" value={SEX_LABEL[pet.sex]} />
           <InfoRow label="Castrado" value={pet.castrado ?? 'Não informado'} />
           <InfoRow label="Peso" value={`${pet.weight} kg`} />
@@ -549,14 +559,20 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>Responsável (Tutor)</h3>
-            {tutor && hasRole('admin') && (
-              <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => onDeleteTutor(tutor)}><X size={14} /></button>
-            )}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {tutor && hasRole('admin', 'atendente') && onEditTutor && (
+                <button className="btn btn-outline btn-sm" onClick={() => onEditTutor(tutor)}>✏️ Editar tutor</button>
+              )}
+              {tutor && hasRole('admin') && (
+                <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => onDeleteTutor(tutor)}><X size={14} /></button>
+              )}
+            </div>
           </div>
           {tutor ? (
             <>
               <InfoRow label="Nome" value={tutor.name} />
               <InfoRow label="CPF" value={tutor.cpf} />
+              {tutor.rg && <InfoRow label="RG" value={tutor.rg} />}
               <InfoRow label="Telefone" value={tutor.phone} />
               <InfoRow label="E-mail" value={tutor.email} />
               <InfoRow label="Endereço" value={tutor.address} />

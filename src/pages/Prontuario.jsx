@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+﻿import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Plus, Search, FileText, Printer, ChevronRight, ChevronDown, X } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import corpImg from '../assets/corpo.jpg'
@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { normIncludes, norm } from '../utils/normalizeText'
 import { usePersistentState } from '../hooks/usePersistentState'
 import ConfirmModal from '../components/ui/ConfirmModal'
+import { calcularIdade } from '../utils/calcularIdade'
 
 // ---- Tipos de consulta e config padrão ----
 export const TIPOS_CONSULTA_DEFAULT = ['Consulta Clínica Geral', 'Consulta Dermatológica', 'Consulta Canábica', 'Retorno']
@@ -687,6 +688,8 @@ export default function ProntuarioPage({ navParams = {} }) {
   const [newTipoInput, setNewTipoInput] = useState('')
   const [sortField, setSortField] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
+  const [bulario] = usePersistentState('petvet-bulario', [])
+  const [prescBulaMed, setPrescBulaMed] = useState(null)
 
   // Visible sections based on selected type and config
   const visibleSections = useMemo(() => {
@@ -798,6 +801,7 @@ export default function ProntuarioPage({ navParams = {} }) {
   function addMedicamento()            { setForm(f => ({ ...f, prescricao: { ...f.prescricao, medicamentos: [...f.prescricao.medicamentos, { nome: '', dose: '', via: '', frequencia: '', duracao: '', obs: '' }] } })) }
   function updateMed(idx, key, value)  { setForm(f => { const meds = [...f.prescricao.medicamentos]; meds[idx] = { ...meds[idx], [key]: value }; return { ...f, prescricao: { ...f.prescricao, medicamentos: meds } } }) }
   function removeMed(idx)              { setForm(f => ({ ...f, prescricao: { ...f.prescricao, medicamentos: f.prescricao.medicamentos.filter((_, i) => i !== idx) } })) }
+  function findBulaForPresc(nome)      { return bulario.find(m => norm(m.nomeComercial) === norm(nome) || normIncludes(m.nomeComercial, nome)) ?? null }
 
   const isReadOnly = selectedPr && !hasRole('admin', 'veterinario')
   const sectionIdx = visibleSections.findIndex(s => s.id === activeSection)
@@ -990,7 +994,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                   <div className="form-group">
                     <label className="form-label">Alimentação</label>
                     <select className="form-select" value={form.anamnese.alimentacao} onChange={e => updateAnamnese('alimentacao', e.target.value)} disabled={isReadOnly}>
-                      {['Ração', 'Natural', 'Ração + NDA', 'Ração + Petisco', 'Outro'].map(o => <option key={o}>{o}</option>)}
+                      {['Ração', 'Ração seca + sachê', 'Ração + AN', 'Ração + Petisco', 'Natural/Caseira', 'Outro'].map(o => <option key={o}>{o}</option>)}
                     </select>
                   </div>
                   <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -1167,7 +1171,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                     <div className="form-group">
                       <label className="form-label">Alimentação</label>
                       <select className="form-select" value={dVal('alimentacao')} onChange={e => dUpd('alimentacao', e.target.value)} disabled={isReadOnly}>
-                        {['Ração seca', 'Ração úmida', 'Ração + NDA', 'Ração + Petisco', 'Natural/Caseira', 'Outro'].map(o => <option key={o}>{o}</option>)}
+                        {['Ração', 'Ração seca + sachê', 'Ração + AN', 'Ração + Petisco', 'Natural/Caseira', 'Outro'].map(o => <option key={o}>{o}</option>)}
                       </select>
                     </div>
                     <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -1501,7 +1505,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                     <div className="form-group">
                       <label className="form-label">Alimentação</label>
                       <select className="form-select" value={cVal('alimentacao')} onChange={e => cUpd('alimentacao', e.target.value)} disabled={isReadOnly}>
-                        {['Ração seca', 'Ração úmida', 'Ração + NDA', 'Ração + Petisco', 'Natural/Caseira', 'Outro'].map(o => <option key={o}>{o}</option>)}
+                        {['Ração', 'Ração seca + sachê', 'Ração + AN', 'Ração + Petisco', 'Natural/Caseira', 'Outro'].map(o => <option key={o}>{o}</option>)}
                       </select>
                     </div>
                     <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -1870,8 +1874,20 @@ export default function ProntuarioPage({ navParams = {} }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '10px 14px' }}>
                       <div className="form-group" style={{ position: 'relative' }}>
                         <label className="form-label">Medicamento</label>
-                        <MedInput value={med.nome} onChange={v => updateMed(idx, 'nome', v)} disabled={isReadOnly}
-                          onSelect={p => { updateMed(idx, 'nome', p.name); if (!med.dose) updateMed(idx, 'dose', p.dosagem ?? '') }} />
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <MedInput value={med.nome} onChange={v => updateMed(idx, 'nome', v)} disabled={isReadOnly}
+                              onSelect={p => { updateMed(idx, 'nome', p.name); if (!med.dose) updateMed(idx, 'dose', p.dosagem ?? '') }} />
+                          </div>
+                          {(() => { const b = med.nome?.length >= 2 ? findBulaForPresc(med.nome) : null; return (
+                            <button type="button" className="btn btn-ghost btn-sm"
+                              title={b ? 'Ver bula' : 'Medicamento não encontrado no bulário'}
+                              disabled={!b} onClick={() => b && setPrescBulaMed(b)}
+                              style={{ alignSelf: 'center', fontSize: '0.875rem', opacity: b ? 1 : 0.35, flexShrink: 0 }}>
+                              📖
+                            </button>
+                          )})()}
+                        </div>
                       </div>
                       <div className="form-group">
                         <label className="form-label">Dose</label>
@@ -1897,6 +1913,46 @@ export default function ProntuarioPage({ navParams = {} }) {
                     {!isReadOnly && <button className="btn btn-outline-danger btn-sm" style={{ marginTop: 8 }} onClick={() => removeMed(idx)}>Remover</button>}
                   </div>
                 ))}
+                {prescBulaMed && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1400, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '32px 16px' }}>
+                    <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 640, boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <h3 style={{ fontWeight: 800, fontSize: '1.05rem', margin: 0 }}>{prescBulaMed.nomeComercial}</h3>
+                          {prescBulaMed.nomeGenerico && <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '2px 0 0' }}>{prescBulaMed.nomeGenerico}</p>}
+                        </div>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setPrescBulaMed(null)}><X size={16} /></button>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', fontSize: '0.875rem' }}>
+                        {[
+                          ['Categoria', prescBulaMed.categoria],
+                          ['Concentração', prescBulaMed.concentracao],
+                          ['Apresentação', prescBulaMed.apresentacao],
+                          ['Fabricante', prescBulaMed.fabricante],
+                          ['Via de administração', prescBulaMed.via],
+                          ['Dose (Cão)', prescBulaMed.doseCao],
+                          ['Dose (Gato)', prescBulaMed.doseGato],
+                          ['Dose (Outros)', prescBulaMed.doseOutros],
+                          ['Frequência', prescBulaMed.frequencia],
+                          ['Duração do tratamento', prescBulaMed.tempoPtto],
+                          ['Interações', prescBulaMed.interacoes],
+                        ].filter(([, v]) => v).map(([k, v]) => (
+                          <div key={k}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>{k}</span>
+                            <span>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {prescBulaMed.indicacoes && <div><p style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 4 }}>Indicações</p><p style={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{prescBulaMed.indicacoes}</p></div>}
+                      {prescBulaMed.contraindicacoes && <div><p style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--danger)', marginBottom: 4 }}>Contraindicações</p><p style={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{prescBulaMed.contraindicacoes}</p></div>}
+                      {prescBulaMed.efeitosAdversos && <div><p style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--warning)', marginBottom: 4 }}>Efeitos Adversos</p><p style={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{prescBulaMed.efeitosAdversos}</p></div>}
+                      {prescBulaMed.observacoes && <div><p style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 4 }}>Observações</p><p style={{ fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>{prescBulaMed.observacoes}</p></div>}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button className="btn btn-primary" onClick={() => setPrescBulaMed(null)}>Fechar</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <hr className="divider" />
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px' }}>
                   <div className="form-group">
@@ -3226,14 +3282,17 @@ function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px', fontSize: '0.875rem' }}>
               {[
-                ['Classe', bulaMed.classe],
-                ['Espécie', bulaMed.especie],
+                ['Categoria', bulaMed.categoria],
                 ['Concentração', bulaMed.concentracao],
+                ['Apresentação', bulaMed.apresentacao],
+                ['Fabricante', bulaMed.fabricante],
                 ['Via de administração', bulaMed.via],
-                ['Dose', bulaMed.dose],
+                ['Dose (Cão)', bulaMed.doseCao],
+                ['Dose (Gato)', bulaMed.doseGato],
+                ['Dose (Outros)', bulaMed.doseOutros],
                 ['Frequência', bulaMed.frequencia],
-                ['Duração', bulaMed.duracao],
-                ['Tempo de carência', bulaMed.tempoCarencia],
+                ['Duração do tratamento', bulaMed.tempoPtto],
+                ['Interações', bulaMed.interacoes],
               ].filter(([, v]) => v).map(([k, v]) => (
                 <div key={k}>
                   <span style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: '0.75rem', display: 'block' }}>{k}</span>
@@ -3278,6 +3337,9 @@ function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
 // ---- Termos TCLE Section ----
 function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
   const [activeModal, setActiveModal] = useState(null)
+  const clinicConfig = (() => { try { return JSON.parse(localStorage.getItem('petvet-clinica-config') ?? 'null') } catch { return null } })() ?? {}
+  const clinicNome = clinicConfig.nome || 'Emporium Vazpet & Tatá Bichos'
+
   const [termoData, setTermoData] = useState({
     procedimento: '', metodo: '', testemunha: '',
     exames: '', valoresEstimados: '',
@@ -3291,9 +3353,122 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
     motivoCertificado: '',
     transitoOrigem: '', transitoDestino: '', transitoFinalidade: '', transitoMeio: '',
     microchip: '', endectocida: '', endectocidaData: '', vermifugo: '', vermifugaData: '',
+    // Declaração de Recusa
+    tutorNomeRecusa: tutorInfo?.name ?? '',
+    tutorRGRecusa: tutorInfo?.rg ?? '',
+    tutorCPFRecusa: tutorInfo?.cpf ?? '',
+    tutorEnderecoRecusa: tutorInfo?.address ?? '',
+    tutorTelRecusa: tutorInfo?.phone ?? '',
+    recusaTratamento: '',
+    vetClinicaRecusa: clinicNome,
+    // Derma Contínuo
+    tutorNomeDerma: tutorInfo?.name ?? '',
+    tutorCPFDerma: tutorInfo?.cpf ?? '',
+    tutorTelDerma: tutorInfo?.phone ?? '',
+    tutorEnderecoDerma: tutorInfo?.address ?? '',
+    afeccaoDerma: '',
+    // Local/Data e Assinaturas (compartilhados)
+    termoLocal: '',
+    termoDataStr: '',
+    assinaturaTutor: null,
+    assinaturaVet: null,
+    assinaturaTutorOffset: 0,
+    assinaturaVetOffset: 0,
   })
 
   const hoje = form.date ? new Date(form.date + 'T00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')
+
+  const [showSigCanvas, setShowSigCanvas] = useState(null)
+  const miniCanvasRef = useRef(null)
+  const miniDrawing = useRef(false)
+  const miniLastPos = useRef({ x: 0, y: 0 })
+
+  useEffect(() => {
+    if (showSigCanvas && miniCanvasRef.current) {
+      miniCanvasRef.current.getContext('2d').clearRect(0, 0, miniCanvasRef.current.width, miniCanvasRef.current.height)
+    }
+  }, [showSigCanvas])
+
+  function getMiniPos(e) {
+    const c = miniCanvasRef.current
+    const rect = c.getBoundingClientRect()
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    return { x: (clientX - rect.left) * (c.width / rect.width), y: (clientY - rect.top) * (c.height / rect.height) }
+  }
+  function miniStartDraw(e) { e.preventDefault(); miniDrawing.current = true; miniLastPos.current = getMiniPos(e) }
+  function miniDraw(e) {
+    e.preventDefault()
+    if (!miniDrawing.current) return
+    const pos = getMiniPos(e)
+    const ctx = miniCanvasRef.current.getContext('2d')
+    ctx.beginPath(); ctx.moveTo(miniLastPos.current.x, miniLastPos.current.y)
+    ctx.lineTo(pos.x, pos.y); ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke()
+    miniLastPos.current = pos
+  }
+  function miniStopDraw() { miniDrawing.current = false }
+  function clearMiniCanvas() {
+    const c = miniCanvasRef.current
+    c.getContext('2d').clearRect(0, 0, c.width, c.height)
+  }
+  function confirmSig() {
+    const dataUrl = miniCanvasRef.current.toDataURL()
+    const key = showSigCanvas === 'tutor' ? 'assinaturaTutor' : 'assinaturaVet'
+    setTermoData(d => ({ ...d, [key]: dataUrl }))
+    setShowSigCanvas(null)
+  }
+
+  const [sigRepoMode, setSigRepoMode] = useState(null)
+  const sigDragRef = useRef({ active: false, type: null, startY: 0, startOffset: 0 })
+
+  useEffect(() => {
+    function onMove(e) {
+      if (!sigDragRef.current.active) return
+      const delta = e.clientY - sigDragRef.current.startY
+      const newOffset = Math.max(-100, Math.min(200, sigDragRef.current.startOffset + delta))
+      const key = sigDragRef.current.type === 'tutor' ? 'assinaturaTutorOffset' : 'assinaturaVetOffset'
+      setTermoData(d => ({ ...d, [key]: newOffset }))
+    }
+    function onUp() { sigDragRef.current.active = false }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+  }, [])
+
+  function startSigDrag(e, type) {
+    e.preventDefault()
+    sigDragRef.current = {
+      active: true, type,
+      startY: e.clientY,
+      startOffset: type === 'tutor' ? (termoData.assinaturaTutorOffset ?? 0) : (termoData.assinaturaVetOffset ?? 0),
+    }
+  }
+
+  function sigBlock(type, labelLine1, labelLine2) {
+    const sig = type === 'tutor' ? termoData.assinaturaTutor : termoData.assinaturaVet
+    const off = type === 'tutor' ? (termoData.assinaturaTutorOffset ?? 0) : (termoData.assinaturaVetOffset ?? 0)
+    const isRepo = sigRepoMode === type
+    return (
+      <div>
+        {sig && (
+          <>
+            <img src={sig} alt="Assinatura" draggable={false}
+              style={{ maxHeight: 50, display: 'block', position: 'relative', top: off, cursor: isRepo ? 'grab' : 'default', userSelect: 'none' }}
+              onMouseDown={isRepo ? e => startSigDrag(e, type) : undefined}
+            />
+            <div className="no-print" style={{ fontSize: '0.7rem', marginBottom: 2 }}>
+              {isRepo
+                ? <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 5px' }} onClick={() => setSigRepoMode(null)}>✓ Confirmar posição</button>
+                : <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.7rem', padding: '2px 5px' }} onClick={() => setSigRepoMode(type)}>↕️ Reposicionar</button>}
+            </div>
+          </>
+        )}
+        <div style={{ borderTop: '1px solid #333', paddingTop: 6 }}>
+          {labelLine1}{labelLine2 ? <><br />{labelLine2}</> : null}
+        </div>
+      </div>
+    )
+  }
 
   const clinicHeader = (
     <div style={{ textAlign: 'center', marginBottom: 16, borderBottom: '2px solid #333', paddingBottom: 12 }}>
@@ -3310,31 +3485,27 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
 
   const qualAnimal = (
     <div style={{ marginBottom: 14, fontSize: '0.875rem', lineHeight: 1.8 }}>
-      <strong>ANIMAL:</strong> {petInfo?.name ?? '___'}, Espécie: {petInfo?.species ?? '___'}, Raça: {petInfo?.breed ?? '___'}, Idade: {petInfo?.birthDate ? calcIdade(petInfo.birthDate) : '___'}, Peso: {petInfo?.weight ?? '___'} kg, Sexo: {petInfo?.sex ?? '___'}
+      <strong>ANIMAL:</strong> {petInfo?.name ?? '___'}, Espécie: {petInfo?.species ?? '___'}, Raça: {petInfo?.breed ?? '___'}, Idade: {petInfo?.birthDate ? calcularIdade(petInfo.birthDate) : '___'}, Peso: {petInfo?.weight ?? '___'} kg, Sexo: {petInfo?.sex ?? '___'}
     </div>
   )
 
+  const vetLabel2 = `CRMV: ${vetInfo?.crmv ?? '—'}${vetInfo?.mapa ? ` · MAPA: ${fmtMapa(vetInfo.mapa)}` : ''}`
+
   const footer = (
     <div style={{ marginTop: 24, fontSize: '0.82rem', lineHeight: 2 }}>
-      <p>Local e data: São Paulo, {hoje}</p>
+      <p>Local e data: {termoData.termoLocal || '_________'}, {termoData.termoDataStr || '___/___/______'}</p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginTop: 20 }}>
-        <div style={{ borderTop: '1px solid #333', paddingTop: 6 }}>Assinatura do Tutor / Responsável<br />{tutorInfo?.name ?? ''}</div>
-        <div style={{ borderTop: '1px solid #333', paddingTop: 6 }}>
-          {vetInfo?.name ?? 'Veterinário Responsável'}<br />
-          CRMV: {vetInfo?.crmv ?? '—'}{vetInfo?.mapa ? ` · MAPA: ${fmtMapa(vetInfo.mapa)}` : ''}
-        </div>
+        {sigBlock('tutor', 'Assinatura do Tutor / Responsável', tutorInfo?.name ?? '')}
+        {sigBlock('vet', vetInfo?.name ?? 'Veterinário Responsável', vetLabel2)}
       </div>
     </div>
   )
 
   const footerSoVet = (
     <div style={{ marginTop: 24, fontSize: '0.82rem', lineHeight: 2 }}>
-      <p>Local e data: São Paulo, {hoje}</p>
+      <p>Local e data: {termoData.termoLocal || '_________'}, {termoData.termoDataStr || '___/___/______'}</p>
       <div style={{ marginTop: 20, maxWidth: 280 }}>
-        <div style={{ borderTop: '1px solid #333', paddingTop: 6 }}>
-          {vetInfo?.name ?? 'Veterinário Responsável'}<br />
-          CRMV: {vetInfo?.crmv ?? '—'}{vetInfo?.mapa ? ` · MAPA: ${fmtMapa(vetInfo.mapa)}` : ''}
-        </div>
+        {sigBlock('vet', vetInfo?.name ?? 'Veterinário Responsável', vetLabel2)}
       </div>
     </div>
   )
@@ -3344,8 +3515,8 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
     if (!el) return
     const isReceita = activeModal === 'receita-simples' || activeModal === 'receita-especial'
     const css = isReceita
-      ? `@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;font-size:13px;line-height:1.6;margin:0;padding:0;display:flex;flex-direction:column;min-height:247mm;box-sizing:border-box;}h2,h3{margin:0 0 8px}.footer-vet{margin-top:auto;padding-top:24px;}p,div,table{page-break-inside:avoid}@media print{button{display:none}}`
-      : `body{font-family:Arial,sans-serif;padding:40px;font-size:13px;line-height:1.6;}h2,h3{margin:0 0 8px}.footer-vet{margin-top:auto;padding-top:32px;}@media print{button{display:none}}`
+      ? `@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;font-size:13px;line-height:1.6;margin:0;padding:0;display:flex;flex-direction:column;min-height:247mm;box-sizing:border-box;}h2,h3{margin:0 0 8px}.footer-vet{margin-top:auto;padding-top:24px;}p,div,table{page-break-inside:avoid}.no-print{display:none!important}@media print{button{display:none}}`
+      : `body{font-family:Arial,sans-serif;padding:40px;font-size:13px;line-height:1.6;}h2,h3{margin:0 0 8px}.footer-vet{margin-top:auto;padding-top:32px;}.no-print{display:none!important}@media print{button{display:none}}`
     const win = window.open('', '_blank', 'width=800,height=700')
     win.document.write(`<html><head><title>Termo</title><style>${css}</style></head><body>${el.innerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`)
     win.document.close()
@@ -3371,7 +3542,9 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
     { id: 'termo-alta',          label: 'Termo de Alta',                  desc: 'Documento de alta hospitalar com orientações pós-internação' },
     { id: 'eutanasia',           label: 'Termo de Eutanásia',             desc: 'Autorização para eutanásia humanitária — CFMV Res. 1000/2012' },
     { id: 'obito',               label: 'Termo de Óbito',                 desc: 'Declaração de óbito do animal' },
-    { id: 'recusa',              label: 'Termo de Recusa / Alta a Pedido',desc: 'Registro de recusa de tratamento ou alta a pedido do tutor' },
+    { id: 'recusa',              label: 'Termo de Recusa / Alta a Pedido',          desc: 'Registro de recusa de tratamento ou alta a pedido do tutor' },
+    { id: 'declaracao-recusa',   label: 'Declaração de Recusa e/ou Interrupção de Tratamento / Alta a Pedido', desc: 'Declaração formal detalhada de recusa de tratamento — com dados completos do tutor' },
+    { id: 'derma-continuo',      label: 'Termo de Ciência, Esclarecimento e Consentimento (Tratamento Dermatológico Contínuo)', desc: 'Consentimento informado para tratamento dermatológico de longa duração' },
   ]
 
   const activeTermoLabel = TERMOS.find(t => t.id === activeModal)?.label ?? ''
@@ -3569,6 +3742,92 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
                 <textarea className="form-textarea" style={{ minHeight: 80 }} value={termoData.procedimentoRecusa} onChange={e => setTermoData(d => ({ ...d, procedimentoRecusa: e.target.value }))} placeholder="Descreva o(s) procedimento(s) recusado(s)..." />
               </div>
             )}
+            {activeModal === 'declaracao-recusa' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label">Nome do tutor</label>
+                  <input className="form-input" value={termoData.tutorNomeRecusa} onChange={e => setTermoData(d => ({ ...d, tutorNomeRecusa: e.target.value }))} placeholder="Nome completo" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">RG</label>
+                  <input className="form-input" value={termoData.tutorRGRecusa} onChange={e => setTermoData(d => ({ ...d, tutorRGRecusa: e.target.value }))} placeholder="00.000.000-0" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">CPF</label>
+                  <input className="form-input" value={termoData.tutorCPFRecusa} onChange={e => setTermoData(d => ({ ...d, tutorCPFRecusa: e.target.value }))} placeholder="000.000.000-00" />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label">Endereço</label>
+                  <input className="form-input" value={termoData.tutorEnderecoRecusa} onChange={e => setTermoData(d => ({ ...d, tutorEnderecoRecusa: e.target.value }))} placeholder="Rua, número, bairro, cidade" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Telefone</label>
+                  <input className="form-input" value={termoData.tutorTelRecusa} onChange={e => setTermoData(d => ({ ...d, tutorTelRecusa: e.target.value }))} placeholder="(11) 99999-9999" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Veterinário ou Clínica</label>
+                  <input className="form-input" value={termoData.vetClinicaRecusa} onChange={e => setTermoData(d => ({ ...d, vetClinicaRecusa: e.target.value }))} placeholder="Nome da clínica ou veterinário" />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label">Tratamento/procedimento recusado</label>
+                  <textarea className="form-textarea" style={{ minHeight: 80 }} value={termoData.recusaTratamento} onChange={e => setTermoData(d => ({ ...d, recusaTratamento: e.target.value }))} placeholder="Descreva o tratamento ou procedimento que está sendo recusado..." />
+                </div>
+              </div>
+            )}
+            {activeModal === 'derma-continuo' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label">Nome do tutor</label>
+                  <input className="form-input" value={termoData.tutorNomeDerma} onChange={e => setTermoData(d => ({ ...d, tutorNomeDerma: e.target.value }))} placeholder="Nome completo" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">CPF</label>
+                  <input className="form-input" value={termoData.tutorCPFDerma} onChange={e => setTermoData(d => ({ ...d, tutorCPFDerma: e.target.value }))} placeholder="000.000.000-00" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Telefone</label>
+                  <input className="form-input" value={termoData.tutorTelDerma} onChange={e => setTermoData(d => ({ ...d, tutorTelDerma: e.target.value }))} placeholder="(11) 99999-9999" />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label">Endereço</label>
+                  <input className="form-input" value={termoData.tutorEnderecoDerma} onChange={e => setTermoData(d => ({ ...d, tutorEnderecoDerma: e.target.value }))} placeholder="Rua, número, bairro, cidade" />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label">Afecção dermatológica diagnosticada</label>
+                  <textarea className="form-textarea" style={{ minHeight: 72 }} value={termoData.afeccaoDerma} onChange={e => setTermoData(d => ({ ...d, afeccaoDerma: e.target.value }))} placeholder="Ex: Dermatite atópica canina, piodermite recorrente..." />
+                </div>
+              </div>
+            )}
+
+            {/* Shared: Local, Data, Assinaturas */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+              <div className="form-group">
+                <label className="form-label">Local</label>
+                <input className="form-input" value={termoData.termoLocal} onChange={e => setTermoData(d => ({ ...d, termoLocal: e.target.value }))} placeholder="cidade" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Data</label>
+                <input className="form-input" value={termoData.termoDataStr} onChange={e => setTermoData(d => ({ ...d, termoDataStr: e.target.value }))} placeholder="DD/MM/AAAA" />
+              </div>
+              <div>
+                <p style={{ fontSize: '0.8125rem', fontWeight: 600, marginBottom: 6 }}>Assinatura do Tutor</p>
+                {termoData.assinaturaTutor
+                  ? <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <img src={termoData.assinaturaTutor} alt="Assinatura" style={{ maxHeight: 50, border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }} />
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setTermoData(d => ({ ...d, assinaturaTutor: null }))}>Limpar</button>
+                    </div>
+                  : <button className="btn btn-outline btn-sm" onClick={() => setShowSigCanvas('tutor')}>✍️ Assinar agora</button>}
+              </div>
+              <div>
+                <p style={{ fontSize: '0.8125rem', fontWeight: 600, marginBottom: 6 }}>Assinatura do Veterinário</p>
+                {termoData.assinaturaVet
+                  ? <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <img src={termoData.assinaturaVet} alt="Assinatura" style={{ maxHeight: 50, border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }} />
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setTermoData(d => ({ ...d, assinaturaVet: null }))}>Limpar</button>
+                    </div>
+                  : <button className="btn btn-outline btn-sm" onClick={() => setShowSigCanvas('vet')}>✍️ Assinar agora</button>}
+              </div>
+            </div>
 
             <div id="termo-print-content" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 20, background: '#fff', color: '#111', fontSize: '0.875rem', lineHeight: 1.8, maxHeight: 400, overflowY: 'auto' }}>
               {clinicHeader}
@@ -3677,12 +3936,9 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
                   </div>
                   <p style={{ marginTop: 12, fontSize: '0.82rem', color: '#777' }}>Data de validade da receita: ___/___/______</p>
                   <div className="footer-vet" style={{ fontSize: '0.82rem', lineHeight: 2 }}>
-                    <p>Local e data: São Paulo, {hoje}</p>
+                    <p>Local e data: {termoData.termoLocal || '_________'}, {termoData.termoDataStr || '___/___/______'}</p>
                     <div style={{ marginTop: 20, maxWidth: 280 }}>
-                      <div style={{ borderTop: '1px solid #333', paddingTop: 6 }}>
-                        {vetInfo?.name ?? 'Veterinário Responsável'}<br />
-                        CRMV: {vetInfo?.crmv ?? '—'}{vetInfo?.mapa ? ` · MAPA: ${fmtMapa(vetInfo.mapa)}` : ''}
-                      </div>
+                      {sigBlock('vet', vetInfo?.name ?? 'Veterinário Responsável', vetLabel2)}
                     </div>
                   </div>
                 </>
@@ -3700,12 +3956,9 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
                     ESTE RECEITUÁRIO SÓ TEM VALIDADE COM CARIMBO E ASSINATURA DO RESPONSÁVEL
                   </p>
                   <div className="footer-vet" style={{ fontSize: '0.82rem', lineHeight: 2 }}>
-                    <p>Local e data: São Paulo, {hoje}</p>
+                    <p>Local e data: {termoData.termoLocal || '_________'}, {termoData.termoDataStr || '___/___/______'}</p>
                     <div style={{ marginTop: 20, maxWidth: 280 }}>
-                      <div style={{ borderTop: '1px solid #333', paddingTop: 6 }}>
-                        {vetInfo?.name ?? 'Veterinário Responsável'}<br />
-                        CRMV: {vetInfo?.crmv ?? '—'}{vetInfo?.mapa ? ` · MAPA: ${fmtMapa(vetInfo.mapa)}` : ''}
-                      </div>
+                      {sigBlock('vet', vetInfo?.name ?? 'Veterinário Responsável', vetLabel2)}
                     </div>
                   </div>
                 </>
@@ -3787,11 +4040,86 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
                   {footer}
                 </>
               )}
+              {activeModal === 'declaracao-recusa' && (
+                <>
+                  <p style={{ fontSize: '0.875rem', lineHeight: 1.8, marginBottom: 14 }}>
+                    Eu, <strong>{termoData.tutorNomeRecusa || '___________________'}</strong>, portador(a) do RG nº <strong>{termoData.tutorRGRecusa || '___.____.____-__'}</strong> e CPF <strong>{termoData.tutorCPFRecusa || '___.___.___-__'}</strong>, residente na <strong>{termoData.tutorEnderecoRecusa || '______________________'}</strong>, telefone <strong>{termoData.tutorTelRecusa || '____________'}</strong>, tutor(a) responsável pelo(a) animal de nome <strong>{petInfo?.name ?? '___'}</strong>, espécie <strong>{petInfo?.species ?? '___'}</strong>, raça <strong>{petInfo?.breed ?? '___'}</strong>, sexo <strong>{petInfo?.sex ?? '___'}</strong>, idade <strong>{petInfo?.birthDate ? calcularIdade(petInfo.birthDate) : '___'}</strong>, declaro para os devidos fins:
+                  </p>
+                  <p style={{ marginBottom: 10 }}><strong>1.</strong> Fui devidamente informado(a) pelo(a) Médico(a) Veterinário(a) <strong>{vetInfo?.name ?? '___'}</strong>, CRMV: <strong>{vetInfo?.crmv ?? '___'}</strong>, sobre o quadro clínico atual do meu animal e a necessidade imperiosa da realização do seguinte tratamento/procedimento: <strong>{termoData.recusaTratamento || '______________________'}</strong></p>
+                  <p style={{ marginBottom: 10 }}><strong>2.</strong> Fui alertado(a) de forma clara e compreensível sobre os benefícios, os riscos, as possíveis complicações e o prognóstico caso o tratamento/procedimento recomendado não seja realizado.</p>
+                  <p style={{ marginBottom: 10 }}><strong>3.</strong> Por livre e espontânea vontade, <strong>DECIDO RECUSAR / INTERROMPER</strong> o tratamento ou procedimento médico-veterinário indicado acima.</p>
+                  <p style={{ marginBottom: 10 }}><strong>4.</strong> Assumo a inteira responsabilidade cível, penal e moral por esta decisão, estando ciente dos riscos à saúde e da possibilidade de agravamento do quadro clínico ou óbito do animal.</p>
+                  <p style={{ marginBottom: 14 }}><strong>5.</strong> Isento o(a) profissional médico(a) veterinário(a) e a clínica/hospital veterinário <strong>{termoData.vetClinicaRecusa || clinicNome}</strong> de qualquer responsabilidade civil ou penal por danos, complicações ou consequências decorrentes exclusivamente da minha recusa em autorizar o procedimento recomendado.</p>
+                  <div style={{ marginTop: 24, fontSize: '0.82rem', lineHeight: 2 }}>
+                    <p>Local e data: {termoData.termoLocal || '_________'}, {termoData.termoDataStr || '___/___/______'}</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginTop: 20 }}>
+                      {sigBlock('tutor', 'Assinatura do Tutor', termoData.tutorNomeRecusa || '')}
+                      {sigBlock('vet', vetInfo?.name ?? 'Veterinário Responsável', vetLabel2)}
+                    </div>
+                  </div>
+                </>
+              )}
+              {activeModal === 'derma-continuo' && (
+                <>
+                  <p style={{ fontWeight: 700, marginBottom: 6 }}>I. IDENTIFICAÇÃO DO PACIENTE E RESPONSÁVEL</p>
+                  <p style={{ marginBottom: 4 }}><strong>Nome do Animal:</strong> {petInfo?.name ?? '___'}</p>
+                  <p style={{ marginBottom: 4 }}><strong>Espécie:</strong> {petInfo?.species ?? '___'} | <strong>Raça:</strong> {petInfo?.breed ?? '___'} | <strong>Sexo:</strong> {petInfo?.sex ?? '___'} | <strong>Idade:</strong> {petInfo?.birthDate ? calcularIdade(petInfo.birthDate) : '___'}</p>
+                  <p style={{ marginBottom: 4 }}><strong>Nome do Tutor/Responsável:</strong> {termoData.tutorNomeDerma || '___________________'}</p>
+                  <p style={{ marginBottom: 4 }}><strong>CPF:</strong> {termoData.tutorCPFDerma || '___.___.___-__'} | <strong>Telefone:</strong> {termoData.tutorTelDerma || '____________'}</p>
+                  <p style={{ marginBottom: 14 }}><strong>Endereço:</strong> {termoData.tutorEnderecoDerma || '______________________'}</p>
+                  <p style={{ fontWeight: 700, marginBottom: 6 }}>II. DIAGNÓSTICO CLÍNICO</p>
+                  <p style={{ marginBottom: 14 }}>Declaro que fui informado(a) pelo(a) médico(a) veterinário(a) que o animal acima identificado foi diagnosticado com a seguinte afecção dermatológica: <strong>{termoData.afeccaoDerma || '______________________'}</strong>.</p>
+                  <p style={{ fontWeight: 700, marginBottom: 6 }}>III. DECLARAÇÃO DE ESCLARECIMENTO</p>
+                  <p style={{ marginBottom: 6 }}><strong>1.</strong> Fui informado(a) sobre o diagnóstico dermatológico do meu animal e os fundamentos do tratamento proposto.</p>
+                  <p style={{ marginBottom: 6 }}><strong>2.</strong> Estou ciente de que afecções dermatológicas frequentemente requerem tratamento contínuo e prolongado, com reavaliações periódicas.</p>
+                  <p style={{ marginBottom: 6 }}><strong>3.</strong> Fui esclarecido(a) sobre a importância da adesão rigorosa ao protocolo terapêutico prescrito, incluindo medicações, dieta e cuidados ambientais.</p>
+                  <p style={{ marginBottom: 6 }}><strong>4.</strong> Compreendo que a interrupção ou modificação não autorizada do tratamento pode levar à recidiva, agravamento do quadro clínico e desenvolvimento de resistência a fármacos.</p>
+                  <p style={{ marginBottom: 6 }}><strong>5.</strong> Fui informado(a) sobre possíveis efeitos colaterais dos medicamentos prescritos e sobre os sinais de alerta que devem motivar retorno imediato à clínica.</p>
+                  <p style={{ marginBottom: 14 }}><strong>6.</strong> Recebi orientações sobre medidas de controle ambiental, higiene e prevenção, fundamentais para o sucesso do tratamento dermatológico.</p>
+                  <p style={{ fontWeight: 700, marginBottom: 6 }}>IV. CONSENTIMENTO</p>
+                  <p style={{ marginBottom: 14 }}>Após ter sido devidamente esclarecido(a) sobre o diagnóstico, o prognóstico e o protocolo de tratamento proposto, <strong>CONSINTO</strong> com a realização do tratamento dermatológico contínuo para o animal acima identificado, comprometendo-me a seguir as orientações fornecidas, comparecer às consultas de reavaliação agendadas e comunicar imediatamente ao(à) veterinário(a) responsável qualquer alteração no quadro clínico do animal.</p>
+                  <div style={{ marginTop: 24, fontSize: '0.82rem', lineHeight: 2 }}>
+                    <p>Local e data: {termoData.termoLocal || '_________'}, {termoData.termoDataStr || '___/___/______'}</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginTop: 20 }}>
+                      {sigBlock('tutor', 'Assinatura do Tutor/Responsável', termoData.tutorNomeDerma || '')}
+                      {sigBlock('vet', vetInfo?.name ?? 'Veterinário Responsável', vetLabel2)}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-ghost" onClick={() => setActiveModal(null)}>Fechar</button>
-              <button className="btn btn-primary" onClick={printModal}><Printer size={14} /> Imprimir</button>
+              <button className="btn btn-primary" onClick={printModal}><Printer size={14} /> 🖨️ Imprimir para assinatura manual</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSigCanvas && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, display: 'flex', flexDirection: 'column', gap: 14, boxShadow: 'var(--shadow-lg)', minWidth: 380 }}>
+            <h4 style={{ margin: 0, fontWeight: 700 }}>Assinatura — {showSigCanvas === 'tutor' ? 'Tutor/Responsável' : 'Veterinário'}</h4>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Desenhe a assinatura abaixo com o mouse ou o dedo.</p>
+            <canvas
+              ref={miniCanvasRef}
+              width={340} height={160}
+              style={{ border: '2px solid var(--border)', borderRadius: 8, background: '#fff', cursor: 'crosshair', touchAction: 'none', display: 'block' }}
+              onMouseDown={miniStartDraw}
+              onMouseMove={miniDraw}
+              onMouseUp={miniStopDraw}
+              onMouseLeave={miniStopDraw}
+              onTouchStart={miniStartDraw}
+              onTouchMove={miniDraw}
+              onTouchEnd={miniStopDraw}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between' }}>
+              <button className="btn btn-ghost btn-sm" onClick={clearMiniCanvas}>Limpar</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ghost" onClick={() => setShowSigCanvas(null)}>Cancelar</button>
+                <button className="btn btn-primary" onClick={confirmSig}>Confirmar</button>
+              </div>
             </div>
           </div>
         </div>
@@ -3917,13 +4245,5 @@ function AnexosSection({ anexos, onChange, isReadOnly }) {
   )
 }
 
-function calcIdade(birthDate) {
-  if (!birthDate) return '—'
-  const birth = new Date(birthDate + 'T00:00')
-  const now = new Date()
-  const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth())
-  if (months < 12) return `${months} meses`
-  const years = Math.floor(months / 12)
-  const rem = months % 12
-  return rem > 0 ? `${years}a ${rem}m` : `${years} anos`
-}
+
+
