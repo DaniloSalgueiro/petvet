@@ -460,6 +460,12 @@ const EMPTY_FORM = {
     alimentacao: 'Ração seca', alimentacaoDesc: '',
     antipulgas: 'Não', antipulgasProduto: '',
     medicamentosPrevios: 'Não', medicamentosPreviosDesc: '',
+    comorbidades: [], comorbidadesOutras: '',
+    triaDor: '', triaConvulsoes: '', triaConvulsoesFreq: '',
+    triaAnsiedade: '', triaSono: '', triaApetite: '',
+    medsContinuos: '', usouCannabis: 'Não', usouCannabisResp: '',
+    estresseAmbiental: 'Baixo', rotinasAtividades: '', comportamentoSocial: 'Sociável',
+    expectativasTutor: '',
     indicacao: '', produto: '', concentracao: '',
     doseKg: '', doseTotal: '',
     via: 'Oral', frequencia: '', duracao: '',
@@ -690,6 +696,8 @@ export default function ProntuarioPage({ navParams = {} }) {
   const [sortDir, setSortDir] = useState('desc')
   const [bulario] = usePersistentState('petvet-bulario', [])
   const [prescBulaMed, setPrescBulaMed] = useState(null)
+  const [termoRequest, setTermoRequest] = useState(null)
+  const [tabAnterior, setTabAnterior] = useState(null)
 
   // Visible sections based on selected type and config
   const visibleSections = useMemo(() => {
@@ -1410,6 +1418,12 @@ export default function ProntuarioPage({ navParams = {} }) {
                       <textarea className="form-textarea" value={dVal('outroExame')} onChange={e => dUpd('outroExame', e.target.value)} disabled={isReadOnly} placeholder="Descreva outro exame realizado..." style={taStyle} />
                     </div>
                   </div>
+                  {!isReadOnly && (
+                    <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }}
+                      onClick={() => { setTabAnterior(activeSection); setActiveSection('termos'); setTermoRequest('derma-continuo') }}>
+                      📄 Gerar Termo Dermatológico Contínuo
+                    </button>
+                  )}
 
                 </div>
               )
@@ -1530,6 +1544,125 @@ export default function ProntuarioPage({ navParams = {} }) {
                     )}
                   </div>
 
+                  {sectionTitle('Comorbidades conhecidas')}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                    {['Doença Renal', 'Insuficiência Hepática', 'Cardiopatia', 'Endocrinopatia', 'Neoplasia', 'Outras'].map(op => {
+                      const chk = (cVal('comorbidades') ?? []).includes(op)
+                      return (
+                        <label key={op} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: isReadOnly ? 'default' : 'pointer', padding: '4px 12px', borderRadius: 6, background: chk ? 'var(--teal-light)' : 'var(--surface-2)', border: `1px solid ${chk ? 'var(--teal)' : 'var(--border)'}`, fontSize: '0.8125rem' }}>
+                          <input type="checkbox" checked={chk} disabled={isReadOnly}
+                            onChange={() => { if (isReadOnly) return; const cur = cVal('comorbidades') ?? []; cUpd('comorbidades', chk ? cur.filter(x => x !== op) : [...cur, op]) }}
+                            style={{ accentColor: 'var(--teal)', width: 14, height: 14 }} />
+                          <span style={{ fontWeight: chk ? 600 : 400 }}>{op}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Observações / detalhes das comorbidades:</label>
+                    <textarea className="form-textarea" value={cVal('comorbidadesOutras')} onChange={e => cUpd('comorbidadesOutras', e.target.value)} disabled={isReadOnly} style={{ ...taStyle, minHeight: 70 }} placeholder="Detalhes, observações ou outras comorbidades..." />
+                  </div>
+
+                  {sectionTitle('Triagem de Sinais Alvo para Canabinoides')}
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '-14px 0 4px' }}>Indique a intensidade atual dos sintomas de 0 (ausente) a 5 (severo):</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      { label: 'Dor Crônica / Inflamação', key: 'triaDor', freqKey: null },
+                      { label: 'Convulsões / Tremores', key: 'triaConvulsoes', freqKey: 'triaConvulsoesFreq' },
+                      { label: 'Ansiedade / Reatividade / Medo', key: 'triaAnsiedade', freqKey: null },
+                      { label: 'Distúrbios do Sono / Agitação Noturna', key: 'triaSono', freqKey: null },
+                      { label: 'Falta de Apetite / Náusea', key: 'triaApetite', freqKey: null },
+                    ].map(({ label, key, freqKey }) => (
+                      <div key={key}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--surface-2)', borderRadius: 8 }}>
+                          <span style={{ flex: 1, fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            {[0,1,2,3,4,5].map(n => (
+                              <label key={n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, cursor: isReadOnly ? 'default' : 'pointer', minWidth: 24 }}>
+                                <input type="radio" checked={cVal(key) === String(n)} disabled={isReadOnly}
+                                  onChange={() => !isReadOnly && cUpd(key, String(n))}
+                                  style={{ accentColor: 'var(--teal)' }} />
+                                <span style={{ fontSize: '0.68rem', color: cVal(key) === String(n) ? 'var(--teal-dark)' : 'var(--text-muted)', fontWeight: cVal(key) === String(n) ? 700 : 400 }}>{n}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        {freqKey && (
+                          <div className="form-group" style={{ marginTop: 6, paddingLeft: 10 }}>
+                            <label className="form-label">Frequência atual dos episódios:</label>
+                            <textarea className="form-textarea" value={cVal(freqKey)} onChange={e => cUpd(freqKey, e.target.value)} disabled={isReadOnly} style={taStyle} />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {sectionTitle('Histórico Terapêutico e Interações Medicamentosas')}
+                  <div style={{ background: 'rgba(255,193,7,0.1)', border: '1px solid #FFC107', borderRadius: 8, padding: '10px 14px', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                    ⚠️ O uso concomitante de óleos de Cannabis com medicamentos metabolizados pelo citocromo P450 exige atenção.
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div className="form-group">
+                      <label className="form-label">Medicamentos em uso contínuo (AINEs, corticoides, anticonvulsivantes, desinfetantes, etc.):</label>
+                      <textarea className="form-textarea" value={cVal('medsContinuos')} onChange={e => cUpd('medsContinuos', e.target.value)} disabled={isReadOnly} placeholder="Liste os medicamentos..." style={taStyle} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">O animal já utilizou produtos à base de Cannabis?</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {['Sim', 'Não'].map(o => { const sel = cVal('usouCannabis') === o; return (
+                          <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: isReadOnly ? 'default' : 'pointer', padding: '4px 12px', borderRadius: 6, background: sel ? 'var(--teal-light)' : 'var(--surface-2)', border: `1px solid ${sel ? 'var(--teal)' : 'var(--border)'}`, fontSize: '0.8125rem' }}>
+                            <input type="radio" checked={sel} disabled={isReadOnly} onChange={() => !isReadOnly && cUpd('usouCannabis', o)} style={{ accentColor: 'var(--teal)', width: 14, height: 14 }} />
+                            <span style={{ fontWeight: sel ? 600 : 400 }}>{o}</span>
+                          </label>
+                        )})}
+                      </div>
+                    </div>
+                    {cVal('usouCannabis') === 'Sim' && (
+                      <div className="form-group">
+                        <label className="form-label">Qual foi a resposta e dosagem utilizada?</label>
+                        <textarea className="form-textarea" value={cVal('usouCannabisResp')} onChange={e => cUpd('usouCannabisResp', e.target.value)} disabled={isReadOnly} style={taStyle} />
+                      </div>
+                    )}
+                  </div>
+
+                  {sectionTitle('Estilo de Vida, Rotina e Ambiente (Anamnese Ampliada)')}
+                  <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    O ambiente molda o tônus endocanabinoide do paciente.
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 20px' }}>
+                    <div className="form-group">
+                      <label className="form-label">Nível de estresse ambiental na casa:</label>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {['Baixo', 'Moderado', 'Alto'].map(o => { const sel = cVal('estresseAmbiental') === o; return (
+                          <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: isReadOnly ? 'default' : 'pointer', padding: '4px 12px', borderRadius: 6, background: sel ? 'var(--teal-light)' : 'var(--surface-2)', border: `1px solid ${sel ? 'var(--teal)' : 'var(--border)'}`, fontSize: '0.8125rem' }}>
+                            <input type="radio" checked={sel} disabled={isReadOnly} onChange={() => !isReadOnly && cUpd('estresseAmbiental', o)} style={{ accentColor: 'var(--teal)', width: 14, height: 14 }} />
+                            <span style={{ fontWeight: sel ? 600 : 400 }}>{o}</span>
+                          </label>
+                        )})}
+                      </div>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Padrão de comportamento social:</label>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        {['Apático/Isolado', 'Sociável', 'Agressivo/Defensivo', 'Hiperativo'].map(o => { const sel = cVal('comportamentoSocial') === o; return (
+                          <label key={o} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: isReadOnly ? 'default' : 'pointer', padding: '4px 12px', borderRadius: 6, background: sel ? 'var(--teal-light)' : 'var(--surface-2)', border: `1px solid ${sel ? 'var(--teal)' : 'var(--border)'}`, fontSize: '0.8125rem' }}>
+                            <input type="radio" checked={sel} disabled={isReadOnly} onChange={() => !isReadOnly && cUpd('comportamentoSocial', o)} style={{ accentColor: 'var(--teal)', width: 14, height: 14 }} />
+                            <span style={{ fontWeight: sel ? 600 : 400 }}>{o}</span>
+                          </label>
+                        )})}
+                      </div>
+                    </div>
+                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                      <label className="form-label">Rotina de atividades físicas e passeios:</label>
+                      <textarea className="form-textarea" value={cVal('rotinasAtividades')} onChange={e => cUpd('rotinasAtividades', e.target.value)} disabled={isReadOnly} style={taStyle} />
+                    </div>
+                  </div>
+
+                  {sectionTitle('Expectativas do Tutor e Termo de Consentimento')}
+                  <div className="form-group">
+                    <label className="form-label">Qual o principal objetivo do tutor com o tratamento?</label>
+                    <textarea className="form-textarea" value={cVal('expectativasTutor')} onChange={e => cUpd('expectativasTutor', e.target.value)} disabled={isReadOnly} placeholder="Ex: ganho de mobilidade, redução de crises, desmame de alopáticos" style={taStyle} />
+                  </div>
                   {sectionTitle('Protocolo Canábico')}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>
@@ -1581,6 +1714,12 @@ export default function ProntuarioPage({ navParams = {} }) {
                       <textarea className="form-textarea" value={cVal('observacoes')} disabled={isReadOnly} onChange={e => cUpd('observacoes', e.target.value)} placeholder="Notas clínicas, monitoramento, ajuste de dose previsto..." style={taStyle} />
                     </div>
                   </div>
+                  {!isReadOnly && (
+                    <button className="btn btn-primary" style={{ width: '100%', marginTop: 8 }}
+                      onClick={() => { setTabAnterior(activeSection); setActiveSection('termos'); setTermoRequest('termo-cannabis') }}>
+                      📄 Gerar Termo de Acompanhamento Canábico
+                    </button>
+                  )}
                 </div>
               )
             })()}
@@ -1979,6 +2118,9 @@ export default function ProntuarioPage({ navParams = {} }) {
                 tutorInfo={TUTORES.find(t => t.id === PETS.find(p => p.id === form.petId)?.tutorId)}
                 vetInfo={VETS.find(v => v.id === form.vetId)}
                 onAddAnexo={!isReadOnly ? ax => setForm(f => ({ ...f, anexos: [...(f.anexos ?? []), { ...ax, id: `ax${Date.now()}` }] })) : undefined}
+                requestModal={termoRequest}
+                onRequestModalHandled={() => setTermoRequest(null)}
+                onModalClose={() => { if (tabAnterior) { setActiveSection(tabAnterior); setTabAnterior(null) } }}
               />
             )}
 
@@ -3335,8 +3477,20 @@ function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
 }
 
 // ---- Termos TCLE Section ----
-function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
+function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo, requestModal, onRequestModalHandled, onModalClose }) {
   const [activeModal, setActiveModal] = useState(null)
+
+  useEffect(() => {
+    if (requestModal) {
+      setActiveModal(requestModal)
+      if (onRequestModalHandled) onRequestModalHandled()
+    }
+  }, [requestModal])
+
+  function closeModal() {
+    setActiveModal(null)
+    if (onModalClose) onModalClose()
+  }
   const clinicConfig = (() => { try { return JSON.parse(localStorage.getItem('petvet-clinica-config') ?? 'null') } catch { return null } })() ?? {}
   const clinicNome = clinicConfig.nome || 'Emporium Vazpet & Tatá Bichos'
 
@@ -3361,6 +3515,11 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
     tutorTelRecusa: tutorInfo?.phone ?? '',
     recusaTratamento: '',
     vetClinicaRecusa: clinicNome,
+    // Cannabis Acompanhamento
+    tutorNomeCanabis: tutorInfo?.name ?? '',
+    tutorCPFCanabis: tutorInfo?.cpf ?? '',
+    tutorEnderecoCanabis: tutorInfo?.address ?? '',
+    tutorTelCanabis: tutorInfo?.phone ?? '',
     // Derma Contínuo
     tutorNomeDerma: tutorInfo?.name ?? '',
     tutorCPFDerma: tutorInfo?.cpf ?? '',
@@ -3524,6 +3683,7 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
       const label = TERMOS.find(t => t.id === activeModal)?.label ?? activeModal
       onAddAnexo({ nome: `${label} — ${hoje}`, tipo: 'termo', conteudoHtml: el.innerHTML, dataAdicionado: new Date().toISOString() })
     }
+    closeModal()
   }
 
   const TERMOS = [
@@ -3545,6 +3705,7 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
     { id: 'recusa',              label: 'Termo de Recusa / Alta a Pedido',          desc: 'Registro de recusa de tratamento ou alta a pedido do tutor' },
     { id: 'declaracao-recusa',   label: 'Declaração de Recusa e/ou Interrupção de Tratamento / Alta a Pedido', desc: 'Declaração formal detalhada de recusa de tratamento — com dados completos do tutor' },
     { id: 'derma-continuo',      label: 'Termo de Ciência, Esclarecimento e Consentimento (Tratamento Dermatológico Contínuo)', desc: 'Consentimento informado para tratamento dermatológico de longa duração' },
+    { id: 'termo-cannabis',      label: 'Termo de Ciência de Acompanhamento Periódico (Canábico)', desc: 'Ciência do tutor sobre acompanhamento periódico para ajuste de dose e diretrizes de receita canábica' },
   ]
 
   const activeTermoLabel = TERMOS.find(t => t.id === activeModal)?.label ?? ''
@@ -3567,7 +3728,7 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
           <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 32, width: '100%', maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: 'var(--shadow-lg)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontWeight: 700, fontSize: '1.05rem', margin: 0 }}>{activeTermoLabel}</h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setActiveModal(null)}><X size={16} /></button>
+              <button className="btn btn-ghost btn-sm" onClick={closeModal}><X size={16} /></button>
             </div>
 
             {activeModal === 'atestado-sanitario' && (
@@ -3795,6 +3956,27 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Afecção dermatológica diagnosticada</label>
                   <textarea className="form-textarea" style={{ minHeight: 72 }} value={termoData.afeccaoDerma} onChange={e => setTermoData(d => ({ ...d, afeccaoDerma: e.target.value }))} placeholder="Ex: Dermatite atópica canina, piodermite recorrente..." />
+                </div>
+              </div>
+            )}
+
+            {activeModal === 'termo-cannabis' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label">Nome do tutor</label>
+                  <input className="form-input" value={termoData.tutorNomeCanabis} onChange={e => setTermoData(d => ({ ...d, tutorNomeCanabis: e.target.value }))} placeholder="Nome completo" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">CPF</label>
+                  <input className="form-input" value={termoData.tutorCPFCanabis} onChange={e => setTermoData(d => ({ ...d, tutorCPFCanabis: e.target.value }))} placeholder="000.000.000-00" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Telefone</label>
+                  <input className="form-input" value={termoData.tutorTelCanabis} onChange={e => setTermoData(d => ({ ...d, tutorTelCanabis: e.target.value }))} placeholder="(11) 99999-9999" />
+                </div>
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label">Endereço</label>
+                  <input className="form-input" value={termoData.tutorEnderecoCanabis} onChange={e => setTermoData(d => ({ ...d, tutorEnderecoCanabis: e.target.value }))} placeholder="Rua, número, bairro, cidade" />
                 </div>
               </div>
             )}
@@ -4087,10 +4269,42 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo }) {
                   </div>
                 </>
               )}
+              {activeModal === 'termo-cannabis' && (
+                <>
+                  <p style={{ fontWeight: 700, marginBottom: 6 }}>I. IDENTIFICAÇÃO DO PACIENTE E RESPONSÁVEL</p>
+                  <p style={{ marginBottom: 4 }}><strong>Nome do Animal:</strong> {petInfo?.name ?? '___'}</p>
+                  <p style={{ marginBottom: 4 }}><strong>Espécie:</strong> {petInfo?.species ?? '___'} | <strong>Raça:</strong> {petInfo?.breed ?? '___'} | <strong>Sexo:</strong> {petInfo?.sex ?? '___'} | <strong>Idade:</strong> {petInfo?.birthDate ? calcularIdade(petInfo.birthDate) : '___'}</p>
+                  <p style={{ marginBottom: 4 }}><strong>Nome do Tutor/Responsável:</strong> {termoData.tutorNomeCanabis || '___________________'}</p>
+                  <p style={{ marginBottom: 4 }}><strong>CPF:</strong> {termoData.tutorCPFCanabis || '___.___.___-__'} | <strong>Telefone:</strong> {termoData.tutorTelCanabis || '____________'}</p>
+                  <p style={{ marginBottom: 14 }}><strong>Endereço:</strong> {termoData.tutorEnderecoCanabis || '______________________'}</p>
+
+                  <p style={{ fontWeight: 700, marginBottom: 6 }}>II. OBJETO DO ACOMPANHAMENTO</p>
+                  <p style={{ marginBottom: 14 }}>O presente termo tem por objeto registrar a ciência do(a) tutor(a) acima qualificado(a) acerca das diretrizes de acompanhamento periódico para o uso de fitocanabinoides no paciente veterinário identificado, em conformidade com a <em>Instrução Normativa MAPA nº 35/2021</em> e as orientações do Conselho Federal de Medicina Veterinária (CFMV).</p>
+
+                  <p style={{ fontWeight: 700, marginBottom: 6 }}>III. CIÊNCIA DO TUTOR</p>
+                  <p style={{ marginBottom: 6 }}><strong>1.</strong> Fui devidamente orientado(a) sobre o protocolo terapêutico com fitocanabinoides prescrito para o meu animal, incluindo a substância utilizada, a via de administração, a posologia e os objetivos terapêuticos.</p>
+                  <p style={{ marginBottom: 6 }}><strong>2.</strong> Estou ciente de que o uso de produtos à base de cannabis veterinária requer <strong>acompanhamento periódico</strong> pelo(a) médico(a) veterinário(a) responsável, para avaliação da resposta terapêutica e eventual ajuste de dose.</p>
+                  <p style={{ marginBottom: 6 }}><strong>3.</strong> Compreendo que a <strong>receita de fitocanabinoide</strong> possui validade limitada, conforme regulamentação vigente, devendo ser renovada em consultas de retorno, e que a dispensação do produto está condicionada à apresentação da receita válida emitida pelo(a) veterinário(a) habilitado(a) com registro MAPA.</p>
+                  <p style={{ marginBottom: 6 }}><strong>4.</strong> Fui alertado(a) sobre possíveis efeitos adversos, incluindo sedação excessiva, alterações gastrointestinais, letargia e, em casos raros, agravamento de sintomas, comprometendo-me a comunicar imediatamente qualquer alteração ao responsável técnico.</p>
+                  <p style={{ marginBottom: 6 }}><strong>5.</strong> Estou ciente de que o produto prescrito <strong>não deve ser compartilhado</strong> com outros animais, nem ter sua dose alterada sem orientação veterinária.</p>
+                  <p style={{ marginBottom: 14 }}><strong>6.</strong> Declaro ter recebido cópia deste termo e que todas as minhas dúvidas foram esclarecidas pelo(a) médico(a) veterinário(a) responsável.</p>
+
+                  <p style={{ fontWeight: 700, marginBottom: 6 }}>IV. RESPONSABILIDADE TÉCNICA</p>
+                  <p style={{ marginBottom: 14 }}>O(A) médico(a) veterinário(a) <strong>{vetInfo?.name ?? '___'}</strong>, CRMV: <strong>{vetInfo?.crmv ?? '___'}</strong>{vetInfo?.mapa ? `, MAPA: ${fmtMapa(vetInfo.mapa)}` : ''}, declara ter prestado as informações necessárias ao(à) tutor(a) e que o protocolo terapêutico foi estabelecido com base na avaliação clínica individual do paciente, observados os princípios da medicina veterinária baseada em evidências e a legislação vigente.</p>
+
+                  <div style={{ marginTop: 24, fontSize: '0.82rem', lineHeight: 2 }}>
+                    <p>Local e data: {termoData.termoLocal || '_________'}, {termoData.termoDataStr || '___/___/______'}</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginTop: 20 }}>
+                      {sigBlock('tutor', 'Assinatura do Tutor/Responsável', termoData.tutorNomeCanabis || '')}
+                      {sigBlock('vet', vetInfo?.name ?? 'Veterinário Responsável', vetLabel2)}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button className="btn btn-ghost" onClick={() => setActiveModal(null)}>Fechar</button>
+              <button className="btn btn-ghost" onClick={closeModal}>Fechar</button>
               <button className="btn btn-primary" onClick={printModal}><Printer size={14} /> 🖨️ Imprimir para assinatura manual</button>
             </div>
           </div>
