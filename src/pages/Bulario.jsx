@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { Search, Plus, X, ChevronRight, Trash2 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import CropModal from '../components/ui/CropModal'
+import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { useAuth } from '../context/AuthContext'
 import { normIncludes, norm } from '../utils/normalizeText'
@@ -56,7 +57,7 @@ export default function BularioPage() {
   const [form, setForm] = useState(EMPTY_MED)
   const [cropSrc, setCropSrc] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
-  const fotoRef = useRef(null)
+
 
   const filtered = bulario
     .filter(m => {
@@ -68,12 +69,12 @@ export default function BularioPage() {
 
   function openNew() { setEditing(null); setForm(EMPTY_MED); setShowForm(true) }
   function openEdit(m) { setEditing(m); setForm({ ...EMPTY_MED, ...m }); setShowForm(true) }
-  function handleFotoChange(e) {
-    const file = e.target.files[0]; if (!file) return
+  function handleFotoFile(file) {
     const reader = new FileReader()
     reader.onload = () => setCropSrc(reader.result)
     reader.readAsDataURL(file)
   }
+
   function save() {
     if (!form.nomeComercial) return
     const sort = arr => [...arr].sort((a, b) => a.nomeComercial.localeCompare(b.nomeComercial, 'pt-BR'))
@@ -258,13 +259,12 @@ export default function BularioPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Foto</label>
-            <input ref={fotoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoChange} />
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              {form.foto && <img src={form.foto} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover' }} />}
-              <button type="button" className="btn btn-outline btn-sm" onClick={() => fotoRef.current?.click()}>
-                {form.foto ? 'Trocar foto' : 'Selecionar foto'}
-              </button>
-              {form.foto && <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setForm(f => ({ ...f, foto: null }))}>Remover</button>}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              {form.foto && <img src={form.foto} alt="" style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <PhotoUploadButtons onFile={handleFotoFile} hasPhoto={!!form.foto} label="foto" />
+                {form.foto && <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setForm(f => ({ ...f, foto: null }))}>Remover</button>}
+              </div>
             </div>
           </div>
         </div>

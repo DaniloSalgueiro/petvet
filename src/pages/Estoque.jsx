@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { Plus, Search, AlertTriangle, X, Package, Trash2 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import CropModal from '../components/ui/CropModal'
+import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import { PRODUTOS, getDaysUntilExpiry } from '../data/mock'
 import { useAuth } from '../context/AuthContext'
 import { normIncludes, norm } from '../utils/normalizeText'
@@ -43,7 +44,7 @@ export default function EstoquePage() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [dupWarn, setDupWarn] = useState('')
   const [cropSrc, setCropSrc] = useState(null)
-  const fotoInputRef = useRef(null)
+
 
   const filtered = produtos
     .filter(p => {
@@ -66,8 +67,7 @@ export default function EstoquePage() {
     setEditing(p); setForm({ ...EMPTY_PROD, ...p }); setDupWarn(''); setShowModal(true)
   }
 
-  function handleFotoChange(e) {
-    const file = e.target.files[0]; if (!file) return
+  function handleFotoFile(file) {
     const reader = new FileReader()
     reader.onload = () => setCropSrc(reader.result)
     reader.readAsDataURL(file)
@@ -274,12 +274,9 @@ export default function EstoquePage() {
                 : <div style={{ width: 64, height: 64, borderRadius: 8, background: 'var(--surface-2)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Package size={22} style={{ color: 'var(--text-muted)' }} /></div>
               }
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => fotoInputRef.current?.click()}>
-                  {form.foto ? 'Trocar foto' : 'Enviar foto'}
-                </button>
+                <PhotoUploadButtons onFile={handleFotoFile} hasPhoto={!!form.foto} label="foto" />
                 {form.foto && <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setForm(f => ({ ...f, foto: null }))}>Remover</button>}
               </div>
-              <input ref={fotoInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFotoChange} />
             </div>
           </div>
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>

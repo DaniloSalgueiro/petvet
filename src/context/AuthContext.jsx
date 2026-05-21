@@ -60,8 +60,17 @@ function initializeAuthStorage() {
   if (changed) savePasswordMap(map)
 }
 
+const SESSION_KEY = 'petvet-session-user'
+
+function getSessionUser() {
+  try {
+    const s = sessionStorage.getItem(SESSION_KEY)
+    return s ? JSON.parse(s) : null
+  } catch { return null }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState(() => getSessionUser())
   const [mustChangePassword, setMustChangePassword] = useState(false)
 
   useEffect(() => { initializeAuthStorage() }, [])
@@ -80,14 +89,17 @@ export function AuthProvider({ children }) {
 
     if (password !== storedPwd) return false
 
-    setUser({ ...found })
+    const sessionUser = { ...found }
+    setUser(sessionUser)
     setMustChangePassword(isFirst)
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser)) } catch {}
     return true
   }
 
   function logout() {
     setUser(null)
     setMustChangePassword(false)
+    try { sessionStorage.removeItem(SESSION_KEY) } catch {}
   }
 
   function hasRole(...roles) {

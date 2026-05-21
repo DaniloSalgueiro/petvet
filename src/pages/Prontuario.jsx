@@ -912,7 +912,7 @@ export default function ProntuarioPage({ navParams = {} }) {
         )}
 
         {/* Seções */}
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="card prontuario-form-card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '0 22px' }} className="no-print">
             <Tabs tabs={visibleSections} active={activeSection} onChange={setActiveSection} />
           </div>
@@ -2140,7 +2140,7 @@ export default function ProntuarioPage({ navParams = {} }) {
           </div>
 
           {/* Navegação entre seções */}
-          <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 22px', borderTop: '1px solid var(--border)' }}>
+          <div className="no-print prontuario-section-nav" style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 22px', borderTop: '1px solid var(--border)' }}>
             <button className="btn btn-ghost" disabled={sectionIdx === 0} onClick={() => setActiveSection(visibleSections[sectionIdx - 1].id)}>← Anterior</button>
             {sectionIdx < visibleSections.length - 1
               ? <button className="btn btn-primary" onClick={() => setActiveSection(visibleSections[sectionIdx + 1].id)}>Próxima →</button>

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
+import MobileNav from './components/MobileNav'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import PetsPage from './pages/Pets'
@@ -41,6 +42,7 @@ function AppShell() {
         <Header currentPage={currentPage} />
         <PageRouter page={currentPage} navParams={navParams} navigateTo={navigateTo} />
       </div>
+      <MobileNav currentPage={currentPage} onNavigate={p => navigateTo(p)} />
     </div>
   )
 }

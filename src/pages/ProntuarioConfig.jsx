@@ -1,8 +1,9 @@
-import { useState, useRef } from 'react'
-import { Plus, X, Settings, Upload } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, X, Settings } from 'lucide-react'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { DEFAULT_PRONTUARIO_CONFIG, SECTIONS_CONFIGURABLES, TIPOS_CONSULTA_DEFAULT } from './Prontuario'
 import CropModal from '../components/ui/CropModal'
+import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 
 export const DEFAULT_CLINICA_CONFIG = {
   nome: 'Emporium Vazpet & Tatá Bichos',
@@ -28,16 +29,18 @@ export default function ProntuarioConfigPage() {
   const [newTipo, setNewTipo] = useState('')
   const [cropSrc, setCropSrc] = useState(null)
   const [cropField, setCropField] = useState(null)
-  const logoEmporiumRef = useRef(null)
-  const logoTataRef = useRef(null)
+
+  function handleLogoFile(field, file) {
+    const reader = new FileReader()
+    reader.onload = ev => { setCropSrc(ev.target.result); setCropField(field) }
+    reader.readAsDataURL(file)
+  }
 
   function handleLogoUpload(field, e) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    const reader = new FileReader()
-    reader.onload = ev => { setCropSrc(ev.target.result); setCropField(field) }
-    reader.readAsDataURL(file)
+    handleLogoFile(field, file)
   }
 
   function toggleSection(tipo, sectionId) {
@@ -198,18 +201,21 @@ export default function ProntuarioConfigPage() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px', marginTop: 14 }}>
           {[
-            { field: 'logoEmporium', label: 'Logo Emporium Vazpet', ref: logoEmporiumRef },
-            { field: 'logoTata', label: 'Logo Tatá Bichos', ref: logoTataRef },
-          ].map(({ field, label, ref }) => (
+            { field: 'logoEmporium', label: 'Logo Emporium Vazpet' },
+            { field: 'logoTata', label: 'Logo Tatá Bichos' },
+          ].map(({ field, label }) => (
             <div key={field} className="form-group">
               <label className="form-label">{label}</label>
-              <input type="file" accept="image/*" style={{ display: 'none' }} ref={ref} onChange={e => handleLogoUpload(field, e)} />
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                {clinica[field] && <img src={clinica[field]} alt={label} style={{ height: 48, maxWidth: 120, objectFit: 'contain', borderRadius: 6, border: '1px solid var(--border)' }} />}
-                <button type="button" className="btn btn-outline btn-sm" onClick={() => ref.current?.click()}>
-                  <Upload size={13} /> {clinica[field] ? 'Trocar' : 'Enviar imagem'}
-                </button>
-                {clinica[field] && <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setClinica(c => ({ ...c, [field]: null }))}>Remover</button>}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                {clinica[field] && <img src={clinica[field]} alt={label} style={{ height: 48, maxWidth: 120, objectFit: 'contain', borderRadius: 6, border: '1px solid var(--border)', flexShrink: 0 }} />}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <PhotoUploadButtons
+                    onFile={file => handleLogoFile(field, file)}
+                    hasPhoto={!!clinica[field]}
+                    label="imagem"
+                  />
+                  {clinica[field] && <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setClinica(c => ({ ...c, [field]: null }))}>Remover</button>}
+                </div>
               </div>
             </div>
           ))}

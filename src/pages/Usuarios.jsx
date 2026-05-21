@@ -230,7 +230,7 @@ export default function UsuariosPage() {
           {[...usuarios].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => {
             const roleCfg = ROLE_CONFIG[u.role]
             return (
-              <div key={u.id} className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16, opacity: u.active ? 1 : 0.55 }}>
+              <div key={u.id} className={`card user-card${u.active ? '' : ' inactive'}`}>
                 <div style={{ width: 44, height: 44, borderRadius: '50%', background: u.active ? 'linear-gradient(135deg, var(--teal), var(--magenta))' : 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: u.active ? '#fff' : 'var(--text-muted)', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>
                   {u.initials}
                 </div>
@@ -259,7 +259,7 @@ export default function UsuariosPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <div className="user-card-actions">
                   <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedUserForLog(u.id); setActiveTab('atividades') }} title="Ver histórico">
                     <Clock size={15} />
                   </button>

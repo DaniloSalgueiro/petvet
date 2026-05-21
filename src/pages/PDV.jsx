@@ -171,9 +171,9 @@ export default function PDVPage({ navigateTo }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16, alignItems: 'start' }}>
+      <div className="pdv-main-grid">
         {/* LEFT: Catalog */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="pdv-catalog-section">
           {/* Tutor selector */}
           <div className="card" style={{ padding: '14px 16px', position: 'relative' }}>
             <p style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 8 }}>Cliente / Tutor</p>
@@ -341,7 +341,7 @@ export default function PDVPage({ navigateTo }) {
 
           {/* Totals + Payment */}
           {cart.length > 0 && (
-            <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="card pdv-cart-footer">
               {itemDiscountTotal > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Subtotal bruto</span>

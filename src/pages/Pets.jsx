@@ -9,6 +9,7 @@ import { useAISearch } from '../hooks/useAISearch'
 import { usePersistentState } from '../hooks/usePersistentState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import CropModal from '../components/ui/CropModal'
+import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import { RACAS_INICIAIS } from '../data/racas'
 
 const SPECIES_ICON = { 'Cão': '🐕', 'Gato': '🐈', 'Peixe': '🐠', 'Pássaro': '🦜', 'Coelho': '🐇' }
@@ -522,7 +523,7 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="pet-detail-grid">
         <div className="card">
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 14 }}>
             {pet.foto && (
@@ -557,9 +558,9 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
         </div>
 
         <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>Responsável (Tutor)</h3>
-            <div style={{ display: 'flex', gap: 6 }}>
+          <div className="pet-tutor-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>Responsável (Tutor)</h3>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
               {tutor && hasRole('admin', 'atendente') && onEditTutor && (
                 <button className="btn btn-outline btn-sm" onClick={() => onEditTutor(tutor)}>✏️ Editar tutor</button>
               )}
@@ -668,32 +669,25 @@ function TutorSearchField({ tutores, value, onChange, onAddNew }) {
 }
 
 function PhotoUpload({ value, onChange }) {
-  const inputRef = useRef(null)
   const [cropSrc, setCropSrc] = useState(null)
 
-  function handleFile(e) {
-    const file = e.target.files[0]
-    if (!file) return
+  function handleFile(file) {
     const reader = new FileReader()
     reader.onload = () => setCropSrc(reader.result)
     reader.readAsDataURL(file)
-    e.target.value = ''
   }
 
   return (
     <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {value
-          ? <img src={value} alt="Foto" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 10, border: '2px solid var(--border)' }} />
-          : <div style={{ width: 72, height: 72, borderRadius: 10, background: 'var(--surface-2)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem' }}>🐾</div>
+          ? <img src={value} alt="Foto" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 10, border: '2px solid var(--border)', flexShrink: 0 }} />
+          : <div style={{ width: 72, height: 72, borderRadius: 10, background: 'var(--surface-2)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.8rem', flexShrink: 0 }}>🐾</div>
         }
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => inputRef.current?.click()}>
-            {value ? 'Trocar foto' : 'Enviar foto'}
-          </button>
+          <PhotoUploadButtons onFile={handleFile} hasPhoto={!!value} label="foto" />
           {value && <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => onChange(null)}>Remover</button>}
         </div>
-        <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFile} />
       </div>
       {cropSrc && (
         <CropModal src={cropSrc}

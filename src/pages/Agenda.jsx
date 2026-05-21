@@ -42,12 +42,16 @@ export default function AgendaPage({ navParams = {} }) {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [selectedDay, setSelectedDay] = useState(today.getDate())
-  const [agendamentos, setAgendamentos] = usePersistentState('petvet-agendamentos', AGENDAMENTOS)
+  const [rawAgendamentos, setAgendamentos] = usePersistentState('petvet-agendamentos', AGENDAMENTOS)
   const [showModal, setShowModal] = useState(false)
   const [editingApt, setEditingApt] = useState(null)
   const [form, setForm] = useState(EMPTY_APT)
   const [statusFilter, setStatusFilter] = useState('todos')
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [mobileView, setMobileView] = useState('lista')
+
+  // Garante que agendamentos é sempre um array válido
+  const agendamentos = Array.isArray(rawAgendamentos) ? rawAgendamentos : []
 
   useEffect(() => {
     if (navParams.petId && navParams.openNew) {
@@ -71,13 +75,13 @@ export default function AgendaPage({ navParams = {} }) {
   ]
 
   function getAptsForDay(d) {
-    return agendamentos.filter(a => a.date === dateStr(year, month, d))
+    return agendamentos.filter(a => a?.date === dateStr(year, month, d))
   }
 
   function getAptsForSelected() {
-    let apts = agendamentos.filter(a => a.date === dateStr(year, month, selectedDay))
+    let apts = agendamentos.filter(a => a?.date === dateStr(year, month, selectedDay))
     if (statusFilter !== 'todos') apts = apts.filter(a => a.status === statusFilter)
-    return apts.sort((a, b) => a.time.localeCompare(b.time))
+    return apts.sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''))
   }
 
   function prevMonth() {
@@ -121,12 +125,17 @@ export default function AgendaPage({ navParams = {} }) {
   const selectedApts = getAptsForSelected()
   const selectedDateLabel = `${selectedDay} de ${MONTHS_PT[month]} de ${year}`
 
+  const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`
+  const monthApts = agendamentos
+    .filter(a => a?.date?.startsWith(monthPrefix))
+    .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '') || (a.time ?? '').localeCompare(b.time ?? ''))
+
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <h2 className="page-title">Agenda</h2>
-          <p className="page-subtitle">{agendamentos.filter(a => a.date === '2026-05-14').length} agendamentos hoje</p>
+          <p className="page-subtitle">{agendamentos.filter(a => a?.date === '2026-05-14').length} agendamentos hoje</p>
         </div>
         {hasRole('admin', 'atendente', 'veterinario') && (
           <button className="btn btn-primary" onClick={openNew}>
@@ -135,7 +144,63 @@ export default function AgendaPage({ navParams = {} }) {
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16, alignItems: 'start' }}>
+      {/* Toggle calendário/lista — visível só em mobile via CSS */}
+      <div className="agenda-toggle-view">
+        <button
+          className={mobileView === 'lista' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
+          onClick={() => setMobileView('lista')}
+        >
+          📋 Lista
+        </button>
+        <button
+          className={mobileView === 'calendar' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
+          onClick={() => setMobileView('calendar')}
+        >
+          📅 Calendário
+        </button>
+      </div>
+
+      {/* Vista Lista mobile */}
+      {mobileView === 'lista' && (
+        <div className="agenda-list-mobile">
+          {monthApts.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              Nenhum agendamento em {MONTHS_PT[month]}.
+            </div>
+          ) : (
+            <div className="agenda-list-items" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {monthApts.map(apt => {
+                const pet = getPetById(apt.petId)
+                const tutor = pet ? getTutorById(pet.tutorId) : null
+                const cfg = TYPE_CONFIG[apt.type] ?? TYPE_CONFIG.outros
+                const stCfg = STATUS_CONFIG[apt.status] ?? STATUS_CONFIG.agendado
+                return (
+                  <div
+                    key={apt.id}
+                    className="card"
+                    style={{ padding: '12px 14px', borderLeft: `3px solid ${cfg.color}`, cursor: hasRole('admin', 'atendente', 'veterinario') ? 'pointer' : 'default' }}
+                    onClick={() => hasRole('admin', 'atendente', 'veterinario') && openEdit(apt)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <div>
+                        <p style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                          {apt.date.split('-').reverse().join('/')} {apt.time} · {pet?.name ?? '?'}
+                        </p>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                          {cfg.label} · {tutor?.name ?? '—'}
+                        </p>
+                      </div>
+                      <span className={`badge badge-${stCfg.color}`} style={{ fontSize: '0.65rem', flexShrink: 0 }}>{stCfg.label}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={`agenda-main-grid${mobileView === 'lista' ? ' agenda-desktop-only' : ''}`}>
         {/* CALENDAR */}
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           {/* Month nav */}
@@ -157,75 +222,71 @@ export default function AgendaPage({ navParams = {} }) {
             ))}
           </div>
 
-          {/* Grid header */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-            {WEEK_DAYS.map(d => (
-              <div key={d} style={{ textAlign: 'center', padding: '8px 4px', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', background: 'var(--surface-2)', textTransform: 'uppercase' }}>
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Days */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-            {cells.map((day, idx) => {
-              const apts = day ? getAptsForDay(day) : []
-              const isSel = day === selectedDay
-              const today = isToday(year, month, day)
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() => day && setSelectedDay(day)}
-                  style={{
-                    minHeight: 88,
-                    padding: '6px 5px',
-                    borderRight: '1px solid var(--border)',
-                    borderBottom: '1px solid var(--border)',
-                    background: !day ? 'var(--surface-2)' : isSel ? 'rgba(39,181,172,0.06)' : 'var(--surface)',
-                    cursor: day ? 'pointer' : 'default',
-                    transition: 'background 100ms',
-                    boxShadow: isSel ? 'inset 0 0 0 2px var(--teal)' : 'none',
-                  }}
-                  onMouseEnter={e => { if (day && !isSel) e.currentTarget.style.background = 'var(--surface-2)' }}
-                  onMouseLeave={e => { if (day) e.currentTarget.style.background = isSel ? 'rgba(39,181,172,0.06)' : 'var(--surface)' }}
-                >
-                  {day && (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 3 }}>
-                        <span style={{
-                          width: 22, height: 22, borderRadius: '50%',
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: '0.8125rem', fontWeight: today ? 800 : 500,
-                          background: today ? 'var(--teal)' : 'transparent',
-                          color: today ? '#fff' : 'var(--text-primary)',
-                        }}>
-                          {day}
-                        </span>
-                      </div>
-                      {apts.slice(0, 3).map(a => {
-                        const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.outros
-                        return (
-                          <div key={a.id} style={{
-                            fontSize: '0.68rem', padding: '2px 4px', borderRadius: 3, marginBottom: 2,
-                            background: cfg.bg, color: cfg.color, fontWeight: 600,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            borderLeft: `2px solid ${cfg.color}`,
-                          }}>
-                            {a.time} {getPetById(a.petId)?.name ?? '?'}
-                          </div>
-                        )
-                      })}
-                      {apts.length > 3 && (
-                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                          +{apts.length - 3} mais
-                        </div>
-                      )}
-                    </>
-                  )}
+          {/* Grid header + Days — scroll horizontal em mobile */}
+          <div className="agenda-cal-scroll">
+            <div className="agenda-cal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+              {WEEK_DAYS.map(d => (
+                <div key={d} style={{ textAlign: 'center', padding: '8px 4px', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', background: 'var(--surface-2)', textTransform: 'uppercase' }}>
+                  {d}
                 </div>
-              )
-            })}
+              ))}
+            </div>
+
+            <div className="agenda-cal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+              {cells.map((day, idx) => {
+                const apts = day ? getAptsForDay(day) : []
+                const isSel = day === selectedDay
+                const todayCell = isToday(year, month, day)
+
+                return (
+                  <div
+                    key={idx}
+                    className={`agenda-cal-cell${!day ? ' empty' : ''}`}
+                    onClick={() => day && setSelectedDay(day)}
+                    style={{
+                      background: !day ? 'var(--surface-2)' : isSel ? 'rgba(39,181,172,0.06)' : 'var(--surface)',
+                      boxShadow: isSel ? 'inset 0 0 0 2px var(--teal)' : 'none',
+                    }}
+                    onMouseEnter={e => { if (day && !isSel) e.currentTarget.style.background = 'var(--surface-2)' }}
+                    onMouseLeave={e => { if (day) e.currentTarget.style.background = isSel ? 'rgba(39,181,172,0.06)' : 'var(--surface)' }}
+                  >
+                    {day && (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 3 }}>
+                          <span style={{
+                            width: 22, height: 22, borderRadius: '50%',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.8125rem', fontWeight: todayCell ? 800 : 500,
+                            background: todayCell ? 'var(--teal)' : 'transparent',
+                            color: todayCell ? '#fff' : 'var(--text-primary)',
+                          }}>
+                            {day}
+                          </span>
+                        </div>
+                        {apts.slice(0, 3).map(a => {
+                          const cfg = TYPE_CONFIG[a.type] ?? TYPE_CONFIG.outros
+                          return (
+                            <div key={a.id} style={{
+                              fontSize: '0.65rem', padding: '1px 3px', borderRadius: 3, marginBottom: 2,
+                              background: cfg.bg, color: cfg.color, fontWeight: 600,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                              borderLeft: `2px solid ${cfg.color}`,
+                            }}>
+                              {a.time} {getPetById(a.petId)?.name ?? '?'}
+                            </div>
+                          )
+                        })}
+                        {apts.length > 3 && (
+                          <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                            +{apts.length - 3}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
@@ -253,12 +314,12 @@ export default function AgendaPage({ navParams = {} }) {
                 Nenhum agendamento
               </p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="agenda-day-items" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {selectedApts.map(apt => {
                   const pet = getPetById(apt.petId)
                   const tutor = pet ? getTutorById(pet.tutorId) : null
                   const cfg = TYPE_CONFIG[apt.type] ?? TYPE_CONFIG.outros
-                  const stCfg = STATUS_CONFIG[apt.status]
+                  const stCfg = STATUS_CONFIG[apt.status] ?? STATUS_CONFIG.agendado
                   return (
                     <div
                       key={apt.id}

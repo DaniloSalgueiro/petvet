@@ -345,13 +345,536 @@ tr:hover td {
   background: var(--surface-2);
 }
 
-/* Responsivo */
+/* ---------------------------------------------------------
+   MOBILE BOTTOM NAVIGATION
+   --------------------------------------------------------- */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  z-index: 9999;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.mobile-nav-inner {
+  display: flex;
+  align-items: stretch;
+  height: 60px;
+}
+
+.mobile-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 6px 4px;
+  min-height: 44px;
+  transition: color var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-nav-item.active {
+  color: var(--teal);
+}
+
+.mobile-nav-item:active {
+  opacity: 0.7;
+}
+
+/* More overlay */
+.mobile-more-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 9998;
+}
+
+.mobile-more-panel {
+  position: fixed;
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: 16px 16px 8px;
+  z-index: 9999;
+  max-height: 65vh;
+  overflow-y: auto;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.mobile-more-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mobile-more-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.mobile-more-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 8px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 72px;
+  transition: background var(--transition), color var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-more-item.active {
+  background: var(--teal-light);
+  color: var(--teal-dark);
+}
+
+.mobile-more-item:active {
+  opacity: 0.75;
+}
+
+[data-theme="dark"] .mobile-more-item.active {
+  background: rgba(39, 181, 172, 0.18);
+  color: var(--teal);
+}
+
+/* ---------------------------------------------------------
+   DASHBOARD — grid de 2 colunas responsivo
+   --------------------------------------------------------- */
+.dash-panels-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ---------------------------------------------------------
+   PDV — grid lateral responsivo
+   --------------------------------------------------------- */
+.pdv-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ---------------------------------------------------------
+   AGENDA — grid lateral responsivo
+   --------------------------------------------------------- */
+.agenda-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ---------------------------------------------------------
+   PET DETAIL — grid de 2 colunas responsivo
+   --------------------------------------------------------- */
+.pet-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ---------------------------------------------------------
+   USUÁRIOS — card responsivo
+   --------------------------------------------------------- */
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  opacity: 1;
+}
+
+.user-card.inactive {
+  opacity: 0.55;
+}
+
+.user-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ---------------------------------------------------------
+   AGENDA — calendário responsivo
+   --------------------------------------------------------- */
+.agenda-cal-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.agenda-cal-grid {
+  min-width: 420px;
+}
+
+.agenda-cal-cell {
+  min-height: 88px;
+  padding: 6px 5px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 100ms;
+}
+
+.agenda-cal-cell.empty {
+  background: var(--surface-2);
+  cursor: default;
+}
+
+.agenda-toggle-view {
+  display: none;
+}
+
+/* ---------------------------------------------------------
+   AGENDA — lista mobile
+   --------------------------------------------------------- */
+.agenda-list-mobile {
+  display: none;
+}
+
+.agenda-desktop-only {
+  /* visível em desktop, ocultado em mobile via media query */
+}
+
+/* ---------------------------------------------------------
+   PDV — carrinho fixo em mobile
+   --------------------------------------------------------- */
+.pdv-cart-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.pdv-catalog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---------------------------------------------------------
+   BREAKPOINTS MOBILE ≤ 768px  (celular + iPad mini)
+   --------------------------------------------------------- */
 @media (max-width: 768px) {
+  /* Sidebar some completamente */
   .sidebar {
-    transform: translateX(-100%);
+    display: none;
   }
 
+  /* Navegação inferior aparece */
+  .mobile-nav {
+    display: block;
+  }
+
+  /* Content ocupa tela cheia */
   .main-content {
     margin-left: 0;
+    min-width: 0;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* Padding reduzido + espaço para bottom nav */
+  .page {
+    padding: 12px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    gap: 14px;
+  }
+
+  /* Header compacto */
+  .top-header {
+    padding: 0 12px;
+    height: 52px;
+  }
+
+  .header-title {
+    font-size: 0.9375rem;
+  }
+
+  /* Stats grid: 2 colunas em mobile */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .stat-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .stat-value {
+    font-size: 1.15rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+  }
+
+  /* Dashboard 2-col grid vira 1 coluna */
+  .dash-panels-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* PDV e Agenda: painéis laterais viram coluna única */
+  .pdv-main-grid,
+  .agenda-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Previne overflow de grids com colunas px fixas em todo o app */
+  .page > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Pet detail: 1 coluna */
+  .pet-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Tutor card header: coluna em mobile */
+  .pet-tutor-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  /* Usuários: card empilha verticalmente */
+  .user-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .user-card-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .user-card-actions .btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  /* Agenda: toggle visível e células menores */
+  .agenda-toggle-view {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .agenda-cal-cell {
+    min-height: 52px;
+    padding: 3px 2px;
+  }
+
+  /* Agenda: lista mobile visível, calendário oculto quando ativo */
+  .agenda-list-mobile {
+    display: block;
+  }
+
+  .agenda-desktop-only {
+    display: none !important;
+  }
+
+  /* PDV: carrinho fica fixo na base */
+  .pdv-cart-footer {
+    position: fixed;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 2px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.14);
+    z-index: 100;
+    max-height: 70vh;
+    overflow-y: auto;
+    border-radius: 0;
+    padding: 12px 14px;
+  }
+
+  .pdv-catalog-section {
+    padding-bottom: 320px;
+  }
+
+  /* Tabelas: garantir scroll horizontal */
+  .table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Page header pode quebrar */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .page-title {
+    font-size: 1.1rem;
+  }
+
+  /* Prontuário: navegação entre seções fica fixa acima da navbar */
+  .prontuario-form-card {
+    padding-bottom: 58px;
+  }
+
+  .prontuario-section-nav {
+    position: fixed;
+    bottom: calc(60px + env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+    z-index: 50;
+    padding: 10px 16px;
+  }
+
+  /* Agenda: padding-bottom para último item aparecer acima da navbar */
+  .agenda-list-items { padding-bottom: 120px; }
+  .agenda-day-items  { padding-bottom: 80px; }
+}
+
+/* ---------------------------------------------------------
+   BREAKPOINTS TABLET 769px – 1024px
+   Sidebar some, navbar inferior aparece, agenda 2 colunas
+   --------------------------------------------------------- */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Sidebar some; mobile nav aparece */
+  .sidebar {
+    display: none;
+  }
+
+  .mobile-nav {
+    display: block;
+  }
+
+  /* Main content ocupa tela cheia */
+  .main-content {
+    margin-left: 0;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* Padding interno + espaço para bottom nav */
+  .page {
+    padding: 16px;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    gap: 16px;
+  }
+
+  /* Previne overflow de grids com colunas fixas */
+  .page > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Agenda: toggle e lista visíveis */
+  .agenda-toggle-view {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .agenda-list-mobile {
+    display: block;
+  }
+
+  /* Esconde grade quando em modo lista */
+  .agenda-desktop-only {
+    display: none !important;
+  }
+
+  /* Agenda: duas colunas (calendário 60% + painel do dia 40%) */
+  .agenda-main-grid {
+    grid-template-columns: 60% 40%;
+    gap: 12px;
+  }
+
+  /* Células do calendário menores para caber em tablet */
+  .agenda-cal-cell {
+    min-height: 55px;
+    padding: 3px 4px;
+    font-size: 12px;
+  }
+
+  /* Header compacto */
+  .top-header {
+    padding: 0 16px;
+  }
+
+  /* Listas da agenda com padding de segurança */
+  .agenda-list-items { padding-bottom: 80px; }
+  .agenda-day-items  { padding-bottom: 60px; }
+}
+
+/* ---------------------------------------------------------
+   BREAKPOINTS CELULAR ≤ 480px
+   --------------------------------------------------------- */
+@media (max-width: 480px) {
+  .page {
+    padding: 10px;
+    gap: 12px;
+  }
+
+  /* Stats: 1 coluna em telas muito pequenas */
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* More grid: 3 colunas em telas estreitas */
+  .mobile-more-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Botões full-width em formulários mobile */
+  .page .btn-primary,
+  .page .btn-accent {
+    width: 100%;
+    justify-content: center;
   }
 }
