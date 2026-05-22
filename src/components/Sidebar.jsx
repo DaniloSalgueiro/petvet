@@ -1,9 +1,10 @@
 import {
   LayoutDashboard, Users, FileText, Calendar,
   Package, Scissors, DollarSign, UserCog, LogOut, ShoppingCart, Syringe,
-  Briefcase, Settings, Tag, Pill, BarChart2,
+  Briefcase, Settings, Tag, Pill, BarChart2, Palette,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useIdentidade } from '../context/IdentidadeContext'
 
 const NAV_ITEMS = [
   { id: 'dashboard',        label: 'Dashboard',       icon: LayoutDashboard },
@@ -24,23 +25,37 @@ const ADMIN_ITEMS = [
   { id: 'funcionarios',      label: 'Funcionários',           icon: Briefcase },
   { id: 'racas',             label: 'Raças',                  icon: Tag },
   { id: 'prontuario-config', label: 'Config. Prontuário',     icon: Settings },
+  { id: 'configuracoes',     label: 'Configurações',          icon: Palette },
 ]
 
 export default function Sidebar({ currentPage, onNavigate }) {
   const { user, logout, hasRole } = useAuth()
+  const { identidade } = useIdentidade()
 
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
         <div className="sidebar-logo-mark">
-          <div className="sidebar-logo-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4.5 9a3.5 3.5 0 1 1 7 0A3.5 3.5 0 0 1 4.5 9zm12 0a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0zM1 19.5C1 16.46 3.46 14 6.5 14h11c3.04 0 5.5 2.46 5.5 5.5v.5H1v-.5z"/>
-            </svg>
+          {/* Logos agrupados com mesmo tamanho (32×32) */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, flexShrink: 0 }}>
+            {identidade.logoP ? (
+              <img src={identidade.logoP} alt="" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 32, height: 32, borderRadius: 6, background: `${identidade.corPrimaria}22`, border: `1.5px solid ${identidade.corPrimaria}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: identidade.corPrimaria, fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                {(identidade.nomeP.replace(/^\W+/, '') || 'E')[0].toUpperCase()}
+              </div>
+            )}
+            {identidade.logoS ? (
+              <img src={identidade.logoS} alt="" style={{ width: 32, height: 32, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 32, height: 32, borderRadius: 6, background: `${identidade.corDestaque}22`, border: `1.5px solid ${identidade.corDestaque}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: identidade.corDestaque, fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                {(identidade.nomeS.replace(/^\W+/, '') || 'T')[0].toUpperCase()}
+              </div>
+            )}
           </div>
           <div className="sidebar-logo-text">
-            <span className="sidebar-logo-name">PetVet</span>
-            <span className="sidebar-logo-sub">Gestão Veterinária</span>
+            <span className="sidebar-logo-name">{identidade.nomeP}</span>
+            <span className="sidebar-logo-sub">{identidade.nomeS}</span>
           </div>
         </div>
       </div>

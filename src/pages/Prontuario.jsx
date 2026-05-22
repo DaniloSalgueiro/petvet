@@ -1974,7 +1974,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                       const _clinica = (() => { try { return JSON.parse(localStorage.getItem('petvet-clinica-config') ?? 'null') } catch { return null } })() ?? {}
                       const _cNome = _clinica.nome || 'Emporium Vazpet & Tatá Bichos'
                       const _cEndereco = [_clinica.endereco, _clinica.telefone].filter(Boolean).join(' · ')
-                      const _logoHtml = [_clinica.logoEmporium, _clinica.logoTata].filter(Boolean).map(src => `<img src="${src}" style="height:48px;object-fit:contain;margin:0 8px" />`).join('')
+                      const _logoHtml = [_clinica.logoEmporium, _clinica.logoTata].filter(Boolean).map(src => `<img src="${src}" style="width:50px;height:50px;object-fit:contain;" />`).join('')
                       win.document.write(`<html><head><title>Receituário</title><style>
                         body{font-family:Arial,sans-serif;padding:40px;font-size:13px;line-height:1.6;color:#111}
                         h2,h3{margin:0 0 8px}hr{border:none;border-top:1px solid #ddd;margin:16px 0}
@@ -1982,7 +1982,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                         @media print{.no-print{display:none}}
                       </style></head><body>
                         <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:16px">
-                          ${_logoHtml ? `<div style="margin-bottom:8px">${_logoHtml}</div>` : ''}
+                          ${_logoHtml ? `<div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:8px">${_logoHtml}</div>` : ''}
                           <h2 style="font-size:1.2rem;font-weight:800;margin:0">${_cNome}</h2>
                           ${_cEndereco ? `<p style="margin:4px 0 0;color:#555;font-size:12px">${_cEndereco}</p>` : ''}
                         </div>
@@ -2374,7 +2374,7 @@ function SolicitacaoExames({ value, onChange, ro, petInfo, tutorInfo, vetInfo, c
     const _clinica = (() => { try { return JSON.parse(localStorage.getItem('petvet-clinica-config') ?? 'null') } catch { return null } })() ?? {}
     const _cNome = _clinica.nome || 'Emporium Vazpet & Tatá Bichos'
     const _cEndereco = [_clinica.endereco, _clinica.telefone].filter(Boolean).join(' · ')
-    const _logoHtml = [_clinica.logoEmporium, _clinica.logoTata].filter(Boolean).map(src => `<img src="${src}" style="height:48px;object-fit:contain;margin:0 8px" />`).join('')
+    const _logoHtml = [_clinica.logoEmporium, _clinica.logoTata].filter(Boolean).map(src => `<img src="${src}" style="width:50px;height:50px;object-fit:contain;" />`).join('')
     const win = window.open('', '_blank', 'width=800,height=700')
     win.document.write(`<html><head><title>Solicitação de Exames</title><style>
       body{font-family:Arial,sans-serif;padding:40px;font-size:13px;line-height:1.6;color:#111}
@@ -2385,7 +2385,7 @@ function SolicitacaoExames({ value, onChange, ro, petInfo, tutorInfo, vetInfo, c
       @media print{.no-print{display:none}}
     </style></head><body>
       <div style="text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:16px">
-        ${_logoHtml ? `<div style="margin-bottom:8px">${_logoHtml}</div>` : ''}
+        ${_logoHtml ? `<div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:8px">${_logoHtml}</div>` : ''}
         <h2 style="font-size:1.2rem;font-weight:800;margin:0">${_cNome}</h2>
         ${_cEndereco ? `<p style="margin:4px 0 0;color:#555;font-size:12px">${_cEndereco}</p>` : ''}
       </div>

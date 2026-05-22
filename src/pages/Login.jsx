@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useIdentidade } from '../context/IdentidadeContext'
 
 export default function Login() {
   const { login } = useAuth()
+  const { identidade } = useIdentidade()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
@@ -36,16 +38,31 @@ export default function Login() {
     <div style={styles.wrapper}>
       <div style={styles.card} className="card">
         <div style={styles.logo}>
-          <div style={styles.logoIcon}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
-              <path d="M4.5 9a3.5 3.5 0 1 1 7 0A3.5 3.5 0 0 1 4.5 9zm12 0a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0zM1 19.5C1 16.46 3.46 14 6.5 14h11c3.04 0 5.5 2.46 5.5 5.5v.5H1v-.5z"/>
-            </svg>
+          {/* Logos agrupados com mesmo tamanho (64×64) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            {identidade.logoP ? (
+              <img src={identidade.logoP} alt="logo" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 64, height: 64, borderRadius: 12, background: `${identidade.corPrimaria}22`, border: `2px solid ${identidade.corPrimaria}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: identidade.corPrimaria, fontSize: 26, fontWeight: 700 }}>
+                {(identidade.nomeP.replace(/^\W+/, '') || 'E')[0].toUpperCase()}
+              </div>
+            )}
+            {identidade.logoS ? (
+              <img src={identidade.logoS} alt="logo2" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 64, height: 64, borderRadius: 12, background: `${identidade.corDestaque}22`, border: `2px solid ${identidade.corDestaque}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: identidade.corDestaque, fontSize: 26, fontWeight: 700 }}>
+                {(identidade.nomeS.replace(/^\W+/, '') || 'T')[0].toUpperCase()}
+              </div>
+            )}
           </div>
           <div>
-            <div style={styles.logoName}>PetVet</div>
-            <div style={styles.logoSub}>Emporium Vazpet · Tatá Bichos</div>
+            <div style={styles.logoName}>{identidade.nomeP}</div>
+            <div style={styles.logoSub}>{identidade.nomeS}</div>
           </div>
         </div>
+        {identidade.slogan && (
+          <p style={{ textAlign: 'center', fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: -8 }}>{identidade.slogan}</p>
+        )}
 
         <h2 style={styles.title}>Entrar no sistema</h2>
 

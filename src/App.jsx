@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { IdentidadeProvider } from './context/IdentidadeContext'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import MobileNav from './components/MobileNav'
@@ -21,6 +22,7 @@ import ProntuarioConfigPage from './pages/ProntuarioConfig'
 import RacasPage from './pages/Racas'
 import BularioPage from './pages/Bulario'
 import RelatoriosPage from './pages/Relatorios'
+import ConfiguracoesPage from './pages/Configuracoes'
 
 function AppShell() {
   const { user, mustChangePassword } = useAuth()
@@ -64,16 +66,19 @@ function PageRouter({ page, navParams, navigateTo }) {
     case 'racas':             return <RacasPage />
     case 'bulario':           return <BularioPage />
     case 'relatorios':        return <RelatoriosPage />
+    case 'configuracoes':     return <ConfiguracoesPage />
     default:                  return <Dashboard navigateTo={navigateTo} />
   }
 }
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <AppShell />
-      </AuthProvider>
-    </ThemeProvider>
+    <IdentidadeProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppShell />
+        </AuthProvider>
+      </ThemeProvider>
+    </IdentidadeProvider>
   )
 }

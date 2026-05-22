@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 
-export default function CropModal({ src, onSave, onClose }) {
+export default function CropModal({ src, onSave, onClose, shape = 'circle' }) {
   const SIZE = 280
   const [scale, setScale] = useState(1)
   const [pos, setPos] = useState({ x: 0, y: 0 })
@@ -45,7 +45,7 @@ export default function CropModal({ src, onSave, onClose }) {
       <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, width: 360, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: 'var(--shadow-lg)' }}>
         <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Ajustar Foto</h3>
         <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>Arraste para reposicionar e use o controle para zoom.</p>
-        <div style={{ width: SIZE, height: SIZE, overflow: 'hidden', borderRadius: '50%', border: '3px solid var(--teal)', cursor: 'grab', position: 'relative', alignSelf: 'center', background: 'var(--surface-2)', userSelect: 'none' }}
+        <div style={{ width: SIZE, height: SIZE, overflow: 'hidden', borderRadius: shape === 'circle' ? '50%' : '12px', border: '3px solid var(--teal)', cursor: 'grab', position: 'relative', alignSelf: 'center', background: 'var(--surface-2)', userSelect: 'none' }}
           onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
           onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}>
           <img src={src} alt="crop" draggable={false}
