@@ -2,7 +2,8 @@
 import { Plus, Search, FileText, Printer, ChevronRight, ChevronDown, X } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import corpImg from '../assets/corpo.jpg'
-import { PRONTUARIOS, PETS, TUTORES, VETS, PRODUTOS, getPetById, getTutorById, getVetById, AGENDAMENTOS } from '../data/mock'
+import { PRONTUARIOS, PETS, TUTORES, PRODUTOS, getPetById, getTutorById, AGENDAMENTOS } from '../data/mock'
+import { getVeterinarios, findVetById } from '../utils/getVeterinarios'
 import { useAuth } from '../context/AuthContext'
 import { normIncludes, norm } from '../utils/normalizeText'
 import { usePersistentState } from '../hooks/usePersistentState'
@@ -680,6 +681,7 @@ function DermaCanvas({ value, onChange, disabled }) {
 
 export default function ProntuarioPage({ navParams = {} }) {
   const { user, hasRole } = useAuth()
+  const vets = getVeterinarios()
   const [prontuarios, setProntuarios] = usePersistentState('petvet-prontuarios', PRONTUARIOS)
   const [prontuarioConfig, setProntuarioConfig] = usePersistentState('petvet-prontuario-config', DEFAULT_PRONTUARIO_CONFIG)
   const [agendamentos, setAgendamentos] = usePersistentState('petvet-agendamentos', AGENDAMENTOS)
@@ -739,7 +741,7 @@ export default function ProntuarioPage({ navParams = {} }) {
     if (filterPetId && pr.petId !== filterPetId) return false
     if (!searchQuery) return true
     const pet = getPetById(pr.petId)
-    const vet = getVetById(pr.vetId)
+    const vet = findVetById(pr.vetId)
     return (
       normIncludes(pet?.name, searchQuery) ||
       normIncludes(vet?.name, searchQuery) ||
@@ -758,7 +760,7 @@ export default function ProntuarioPage({ navParams = {} }) {
     const dir = sortDir === 'asc' ? 1 : -1
     if (sortField === 'date') return dir * (new Date(a.date) - new Date(b.date))
     if (sortField === 'pet') return dir * (getPetById(a.petId)?.name ?? '').localeCompare(getPetById(b.petId)?.name ?? '', 'pt-BR')
-    if (sortField === 'vet') return dir * (getVetById(a.vetId)?.name ?? '').localeCompare(getVetById(b.vetId)?.name ?? '', 'pt-BR')
+    if (sortField === 'vet') return dir * (findVetById(a.vetId)?.name ?? '').localeCompare(findVetById(b.vetId)?.name ?? '', 'pt-BR')
     if (sortField === 'tipo') return dir * (a.tipoConsulta ?? 'Consulta').localeCompare(b.tipoConsulta ?? 'Consulta', 'pt-BR')
     return 0
   })
@@ -874,7 +876,7 @@ export default function ProntuarioPage({ navParams = {} }) {
               <label className="form-label">Veterinário *</label>
               <select className="form-select" value={form.vetId} onChange={e => setForm(f => ({ ...f, vetId: e.target.value }))}>
                 <option value="">Selecione</option>
-                {VETS.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                {vets.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
               </select>
             </div>
             <div className="form-group">
@@ -1936,7 +1938,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                 value={form.solicitacaoExames ?? {}} onChange={updateSolicitacao} ro={isReadOnly}
                 petInfo={PETS.find(p => p.id === form.petId)}
                 tutorInfo={TUTORES.find(t => t.id === PETS.find(p => p.id === form.petId)?.tutorId)}
-                vetInfo={VETS.find(v => v.id === form.vetId)}
+                vetInfo={findVetById(form.vetId)}
                 consultaDate={form.date}
                 onAddAnexo={!isReadOnly ? ax => setForm(f => ({ ...f, anexos: [...(f.anexos ?? []), { ...ax, id: `ax${Date.now()}` }] })) : undefined}
               />
@@ -1967,7 +1969,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                     <button className="btn btn-outline btn-sm no-print" onClick={() => {
                       const petI = PETS.find(p => p.id === form.petId)
                       const tutorI = petI ? TUTORES.find(t => t.id === petI.tutorId) : null
-                      const vetI = VETS.find(v => v.id === form.vetId)
+                      const vetI = findVetById(form.vetId)
                       const meds = form.prescricao.medicamentos
                       const dateStr = form.date ? new Date(form.date + 'T00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')
                       const win = window.open('', '_blank', 'width=800,height=700')
@@ -2116,7 +2118,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                 form={form}
                 petInfo={PETS.find(p => p.id === form.petId)}
                 tutorInfo={TUTORES.find(t => t.id === PETS.find(p => p.id === form.petId)?.tutorId)}
-                vetInfo={VETS.find(v => v.id === form.vetId)}
+                vetInfo={findVetById(form.vetId)}
                 onAddAnexo={!isReadOnly ? ax => setForm(f => ({ ...f, anexos: [...(f.anexos ?? []), { ...ax, id: `ax${Date.now()}` }] })) : undefined}
                 requestModal={termoRequest}
                 onRequestModalHandled={() => setTermoRequest(null)}
@@ -2211,7 +2213,7 @@ export default function ProntuarioPage({ navParams = {} }) {
             {sortedFiltered.map(pr => {
               const pet = getPetById(pr.petId)
               const tutor = pet ? getTutorById(pet.tutorId) : null
-              const vet = getVetById(pr.vetId)
+              const vet = findVetById(pr.vetId)
               return (
                 <tr key={pr.id} style={{ cursor: 'pointer' }} onClick={() => { setSelectedPr(pr); setForm({ ...EMPTY_FORM, ...pr, vitals: { ...EMPTY_FORM.vitals, ...(pr.vitals ?? {}) }, anamnese: { ...EMPTY_FORM.anamnese, ...(pr.anamnese ?? {}) }, derma: { ...EMPTY_FORM.derma, ...(pr.derma ?? {}) }, cannabis: { ...EMPTY_FORM.cannabis, ...(pr.cannabis ?? {}) }, solicitacaoExames: pr.solicitacaoExames ?? {}, anexos: pr.anexos ?? [] }); setSignatureData(pr.assinatura); setActiveSection('tipo'); setView('form') }}>
                   <td style={{ whiteSpace: 'nowrap' }}>{new Date(pr.date + 'T00:00').toLocaleDateString('pt-BR')}</td>
@@ -2971,7 +2973,7 @@ function ManualColeta() {
 // ---- Assinatura Section ----
 function AssinaturaSection({ form, signatureData, setSignatureData, isReadOnly }) {
   const [mode, setMode] = useState('desenhar') // 'desenhar' | 'imagem'
-  const vet = VETS.find(v => v.id === form.vetId)
+  const vet = findVetById(form.vetId)
 
   function handleImageUpload(e) {
     const file = e.target.files?.[0]

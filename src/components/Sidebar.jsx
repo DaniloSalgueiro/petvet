@@ -29,7 +29,7 @@ const ADMIN_ITEMS = [
 ]
 
 export default function Sidebar({ currentPage, onNavigate }) {
-  const { user, logout, hasRole } = useAuth()
+  const { user, logout, hasRole, hasPermission } = useAuth()
   const { identidade } = useIdentidade()
 
   return (
@@ -71,19 +71,25 @@ export default function Sidebar({ currentPage, onNavigate }) {
           />
         ))}
 
-        {hasRole('admin') && (
-          <>
-            <span className="sidebar-section-label">Administração</span>
-            {ADMIN_ITEMS.map(item => (
-              <NavItem
-                key={item.id}
-                item={item}
-                active={currentPage === item.id}
-                onClick={() => onNavigate(item.id)}
-              />
-            ))}
-          </>
-        )}
+        {(() => {
+          const visibleAdminItems = ADMIN_ITEMS.filter(item =>
+            hasRole('admin') || hasPermission(item.id, 'view')
+          )
+          if (visibleAdminItems.length === 0) return null
+          return (
+            <>
+              <span className="sidebar-section-label">Administração</span>
+              {visibleAdminItems.map(item => (
+                <NavItem
+                  key={item.id}
+                  item={item}
+                  active={currentPage === item.id}
+                  onClick={() => onNavigate(item.id)}
+                />
+              ))}
+            </>
+          )
+        })()}
       </nav>
 
       <div className="sidebar-footer">

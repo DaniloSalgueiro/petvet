@@ -32,7 +32,7 @@ const PAYMENT_LABELS = { pix: 'PIX', debito: 'Cartão de Débito', credito: 'Car
 function fmt(v) { return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` }
 
 export default function FinanceiroPage() {
-  const { hasRole } = useAuth()
+  const { hasRole, hasPermission } = useAuth()
   const [activeTab, setActiveTab] = useState('dre')
   const [lancamentos, setLancamentos] = usePersistentState('petvet-lancamentos', LANCAMENTOS)
   const [comissoesConfig, setComissoesConfig] = usePersistentState('petvet-comissoes', COMISSOES_CONFIG)
@@ -123,12 +123,12 @@ export default function FinanceiroPage() {
           <p className="page-subtitle">Demonstrativo e controle de lançamentos</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {hasRole('admin') && (
+          {hasPermission('financeiro', 'edit') && (
             <button className="btn btn-outline btn-sm" onClick={() => { setPaymentRatesForm({ ...paymentRates }); setShowPaymentSettingsModal(true) }}>
               <Settings size={15} /> Configurações
             </button>
           )}
-          {activeTab === 'lancamentos' && hasRole('admin') && (
+          {activeTab === 'lancamentos' && hasPermission('financeiro', 'edit') && (
             <button className="btn btn-primary" onClick={() => setShowModal(true)}><Plus size={16} /> Novo Lançamento</button>
           )}
         </div>
@@ -267,7 +267,7 @@ export default function FinanceiroPage() {
           <div className="table-wrapper">
             <table>
               <thead>
-                <tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Método</th><th>Status</th><th style={{ textAlign: 'right' }}>Valor</th>{hasRole('admin') && <th></th>}</tr>
+                <tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Método</th><th>Status</th><th style={{ textAlign: 'right' }}>Valor</th>{hasPermission('financeiro', 'delete') && <th></th>}</tr>
               </thead>
               <tbody>
                 {filteredLans.map(l => (
@@ -285,7 +285,7 @@ export default function FinanceiroPage() {
                     <td style={{ textAlign: 'right', fontWeight: 700, color: l.type === 'receita' ? 'var(--success)' : 'var(--danger)', whiteSpace: 'nowrap' }}>
                       {l.type === 'receita' ? '+' : '−'} {fmt(l.value)}
                     </td>
-                    {hasRole('admin') && (
+                    {hasPermission('financeiro', 'delete') && (
                       <td>
                         <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)', padding: 4 }} onClick={() => setDeleteTarget(l)} title="Excluir">
                           <Trash2 size={14} />
@@ -310,7 +310,7 @@ export default function FinanceiroPage() {
             <select className="form-select" style={{ width: 100 }} value={selectedYear} onChange={e => setSelectedYear(Number(e.target.value))}>
               {[2025, 2026, 2027].map(y => <option key={y}>{y}</option>)}
             </select>
-            {hasRole('admin') && (
+            {hasPermission('financeiro', 'edit') && (
               <button className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={() => { setEditingComissao(null); setComissaoForm({ name: '', type: 'veterinario', rates: { ...EMPTY_RATES } }); setShowComissaoModal(true) }}>
                 <Plus size={14} /> Configurar
               </button>
@@ -331,7 +331,7 @@ export default function FinanceiroPage() {
                       <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>{cfg.name}</p>
                       <span className={`badge ${typeBadge[cfg.type] ?? 'badge-neutral'}`}>{typeLabel[cfg.type] ?? cfg.type}</span>
                       {pago && <span className="badge badge-success">Pago</span>}
-                      {hasRole('admin') && (
+                      {hasPermission('financeiro', 'edit') && (
                         <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => { setEditingComissao(cfg); setComissaoForm({ name: cfg.name, type: cfg.type, rates: { ...EMPTY_RATES, ...cfg.rates } }); setShowComissaoModal(true) }}>
                           Editar taxas
                         </button>
@@ -352,7 +352,7 @@ export default function FinanceiroPage() {
                   <div style={{ textAlign: 'right', flexShrink: 0, minWidth: 160 }}>
                     <p style={{ fontWeight: 800, fontSize: '1.25rem', color: pago ? 'var(--success)' : 'var(--text-primary)' }}>{fmt(valor)}</p>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 10 }}>comissão do período</p>
-                    {hasRole('admin') && (
+                    {hasPermission('financeiro', 'edit') && (
                       <button className={pago ? 'btn btn-outline btn-sm' : 'btn btn-primary btn-sm'} onClick={() => togglePago(cfg.id)}>
                         {pago ? 'Desfazer' : 'Marcar como pago'}
                       </button>

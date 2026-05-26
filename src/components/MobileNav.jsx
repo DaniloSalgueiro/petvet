@@ -32,7 +32,7 @@ const ADMIN_MORE = [
 ]
 
 export default function MobileNav({ currentPage, onNavigate }) {
-  const { hasRole } = useAuth()
+  const { hasRole, hasPermission } = useAuth()
   const [showMore, setShowMore] = useState(false)
 
   function goTo(id) {
@@ -77,7 +77,7 @@ export default function MobileNav({ currentPage, onNavigate }) {
                 </button>
               )
             })}
-            {hasRole('admin') && ADMIN_MORE.map(item => {
+            {ADMIN_MORE.filter(item => hasRole('admin') || hasPermission(item.id, 'view')).map(item => {
               const Icon = item.icon
               return (
                 <button

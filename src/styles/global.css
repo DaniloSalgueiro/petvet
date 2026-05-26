@@ -7,26 +7,41 @@
    1. DESIGN TOKENS — MODO CLARO (padrão)
    --------------------------------------------------------- */
 :root {
-  /* Marca */
+  /* Marca / Cliente */
   --teal: #27B5AC;
-  --teal-dark: #1d8f88;
+  --teal2: #1d9990;
+  --teal-dark: #1d9990;
   --teal-light: #d4f0ee;
   --magenta: #DE098D;
-  --magenta-dark: #b5076f;
+  --mag2: #b8076f;
+  --magenta-dark: #b8076f;
   --magenta-light: #fce4f3;
 
-  /* Superfícies */
-  --bg: #f4f6f8;
-  --surface: #ffffff;
-  --surface-2: #f0f2f4;
-  --border: #e2e6ea;
-  --border-strong: #c8cdd3;
+  /* Salgueiro Systems — Sidebar (Claro: azul marinho) */
+  --sidebar-bg: #1a3a6b;
+  --sidebar-border: transparent;
+  --sidebar-text: #ffffff;
+  --sidebar-icon-active-bg: rgba(255, 255, 255, 0.2);
+  --sidebar-icon-active-border: rgba(255, 255, 255, 0.35);
+  --sidebar-divider: rgba(255, 255, 255, 0.15);
 
-  /* Texto — explícitos para não vazar em botões */
-  --text-primary: #1a1f27;
-  --text-secondary: #4a5568;
-  --text-muted: #7a8699;
-  --text-on-brand: #ffffff;   /* texto sobre teal ou magenta */
+  /* Salgueiro Systems — Topbar (Claro) */
+  --topbar-bg: #ffffff;
+  --topbar-border: #e5e5e5;
+
+  /* Superfícies (Claro) */
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface-2: #f0f0f0;
+  --border: #e5e5e5;
+  --border-strong: #c8cdd3;
+  --input-bg: #ffffff;
+
+  /* Texto (Claro) */
+  --text-primary: #1a1a1a;
+  --text-secondary: #555555;
+  --text-muted: #999999;
+  --text-on-brand: #ffffff;
 
   /* Estados */
   --danger: #e53e3e;
@@ -56,17 +71,37 @@
    2. DESIGN TOKENS — MODO ESCURO
    --------------------------------------------------------- */
 [data-theme="dark"] {
-  --bg: #0f1117;
-  --surface: #1a1f2e;
-  --surface-2: #242938;
-  --border: #2d3347;
-  --border-strong: #3d4460;
+  /* Salgueiro Systems — Sidebar (Escuro: preto + dourado) */
+  --sidebar-bg: #0f0f0f;
+  --sidebar-border: #D4AF37;
+  --sidebar-text: #D4AF37;
+  --sidebar-icon-active-bg: rgba(212, 175, 55, 0.1);
+  --sidebar-icon-active-border: rgba(212, 175, 55, 0.3);
+  --sidebar-divider: rgba(212, 175, 55, 0.25);
 
-  --text-primary: #f0f2f5;
-  --text-secondary: #a8b2c8;
-  --text-muted: #6b7a9a;
+  /* Salgueiro Systems — Topbar (Escuro) */
+  --topbar-bg: #0f0f0f;
+  --topbar-border: rgba(212, 175, 55, 0.2);
+
+  /* Dourado */
+  --gold: #D4AF37;
+  --gold2: #B8960C;
+
+  /* Superfícies (Escuro) */
+  --bg: #111111;
+  --surface: #0f0f0f;
+  --surface-2: #1a1a1a;
+  --border: rgba(212, 175, 55, 0.15);
+  --border-strong: rgba(212, 175, 55, 0.3);
+  --input-bg: #1a1a1a;
+
+  /* Texto (Escuro) */
+  --text-primary: #e0e0e0;
+  --text-secondary: #666666;
+  --text-muted: #888888;
   --text-on-brand: #ffffff;
 
+  /* Sombras */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -268,6 +303,47 @@ input, textarea, select, button {
   color: var(--danger);
 }
 
+/* --- Dark mode overrides -------------------------------- */
+[data-theme="dark"] .btn-ghost {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+[data-theme="dark"] .btn-ghost:hover:not(:disabled) {
+  background: rgba(212, 175, 55, 0.1);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+[data-theme="dark"] .btn-primary:not(:disabled) {
+  box-shadow: 0 0 8px rgba(39, 181, 172, 0.2);
+}
+[data-theme="dark"] .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 14px rgba(39, 181, 172, 0.4);
+}
+[data-theme="dark"] .btn-accent:not(:disabled) {
+  box-shadow: 0 0 8px rgba(222, 9, 141, 0.2);
+}
+[data-theme="dark"] .btn-accent:hover:not(:disabled) {
+  box-shadow: 0 0 14px rgba(222, 9, 141, 0.4);
+}
+
+/* --- Inputs dark focus ---------------------------------- */
+[data-theme="dark"] .form-input:focus,
+[data-theme="dark"] .form-select:focus,
+[data-theme="dark"] .form-textarea:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 6px rgba(39, 181, 172, 0.25);
+}
+
+/* --- Stat KPI com cores da marca ----------------------- */
+.stat-value-teal    { color: var(--teal); }
+.stat-value-magenta { color: var(--magenta); }
+[data-theme="dark"] .stat-value-teal {
+  text-shadow: 0 0 8px rgba(39, 181, 172, 0.35);
+}
+[data-theme="dark"] .stat-value-magenta {
+  text-shadow: 0 0 8px rgba(222, 9, 141, 0.35);
+}
+
 /* --- Tamanhos ------------------------------------------- */
 .btn-sm {
   padding: 6px 12px;
@@ -340,7 +416,7 @@ input, textarea, select, button {
 .form-input,
 .form-select,
 .form-textarea {
-  background: var(--surface);
+  background: var(--input-bg);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);

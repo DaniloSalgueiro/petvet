@@ -4,7 +4,7 @@ import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Tabs from '../components/ui/Tabs'
 import { USUARIOS, ATIVIDADES, getUserById } from '../data/mock'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, markUserDeleted } from '../context/AuthContext'
 import { usePersistentState } from '../hooks/usePersistentState'
 
 const ROLE_CONFIG = {
@@ -42,9 +42,9 @@ const EMPTY_PROFILE = {
 }
 
 export default function UsuariosPage() {
-  const { user: currentUser, hasRole, resetPassword } = useAuth()
+  const { user: currentUser, hasRole, hasPermission, resetPassword } = useAuth()
 
-  if (!hasRole('admin')) {
+  if (!hasPermission('usuarios', 'view')) {
     return (
       <div className="page">
         <div className="page-header">
@@ -54,7 +54,7 @@ export default function UsuariosPage() {
           <Shield size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
           <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Acesso restrito</p>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 6 }}>
-            Apenas administradores podem gerenciar usuários.
+            Você não tem permissão para acessar este módulo.
           </p>
         </div>
       </div>
@@ -491,7 +491,11 @@ export default function UsuariosPage() {
       <ConfirmModal
         isOpen={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => { setUsuarios(prev => prev.filter(u => u.id !== deleteTarget.id)); setDeleteTarget(null) }}
+        onConfirm={() => {
+          markUserDeleted(deleteTarget.id)
+          setUsuarios(prev => prev.filter(u => u.id !== deleteTarget.id))
+          setDeleteTarget(null)
+        }}
         message={`Excluir o usuário "${deleteTarget?.name}"? O item será excluído permanentemente. Confirmar?`}
       />
 

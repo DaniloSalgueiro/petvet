@@ -50,7 +50,7 @@ const EMPTY_FUNC = {
   nome: '', cargo: '', salarioBase: '', vr: '', va: '',
   planoSaude: 'Não', planoSaudeValor: '',
   premiacao: '', adiantamento: '', outrosDescontos: '', outrosBeneficios: '',
-  ativo: true,
+  ativo: true, apareceAgenda: false,
 }
 
 export default function FuncionariosPage() {
@@ -370,6 +370,21 @@ export default function FuncionariosPage() {
             <select className="form-select" value={form.ativo === false ? 'Inativo' : 'Ativo'} onChange={e => setForm(f => ({ ...f, ativo: e.target.value === 'Ativo' }))}>
               <option>Ativo</option><option>Inativo</option>
             </select>
+          </div>
+
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
+              <input
+                type="checkbox"
+                checked={!!form.apareceAgenda}
+                onChange={e => setForm(f => ({ ...f, apareceAgenda: e.target.checked }))}
+                style={{ width: 16, height: 16, accentColor: 'var(--teal)', cursor: 'pointer' }}
+              />
+              Aparece na agenda como banhista/tosador
+            </label>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4, marginLeft: 26 }}>
+              Quando marcado, este funcionário aparecerá no seletor de banhista/tosador ao criar agendamentos de banho e tosa.
+            </p>
           </div>
         </div>
       </Modal>

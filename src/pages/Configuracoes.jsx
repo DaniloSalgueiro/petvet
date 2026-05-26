@@ -1,9 +1,44 @@
 import { useState, useEffect, useRef } from 'react'
-import { RotateCcw, Save } from 'lucide-react'
+import { RotateCcw, Save, MessageCircle, History, Settings2, Trash2 } from 'lucide-react'
 import { useIdentidade, DEFAULT_IDENTIDADE } from '../context/IdentidadeContext'
+import { DEFAULT_FOLLOWUP_CONFIG } from '../context/FollowupContext'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import ConfirmModal from '../components/ui/ConfirmModal'
+
+const FOLLOWUP_KEY  = 'petvet-followup-config'
+const FOLLOWUP_QUEUE_KEY = 'petvet-followup-queue'
+const TEMPO_OPTIONS = [
+  { value: 30,   label: '30 minutos' },
+  { value: 60,   label: '1 hora' },
+  { value: 120,  label: '2 horas' },
+  { value: 1440, label: '24 horas' },
+]
+
+function loadFollowupConfig() {
+  try { return { ...DEFAULT_FOLLOWUP_CONFIG, ...JSON.parse(localStorage.getItem(FOLLOWUP_KEY) ?? '{}') } }
+  catch { return { ...DEFAULT_FOLLOWUP_CONFIG } }
+}
+function loadFollowupQueue() {
+  try { return JSON.parse(localStorage.getItem(FOLLOWUP_QUEUE_KEY) ?? '[]') } catch { return [] }
+}
+function fmtDT(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+const TABELA_FIELDS = [
+  { key: 'Consulta Clínica Geral',   label: 'Consulta Clínica Geral' },
+  { key: 'Consulta Dermatológica',   label: 'Consulta Dermatológica' },
+  { key: 'Consulta Canábica',        label: 'Consulta Canábica' },
+  { key: 'Retorno',                  label: 'Retorno' },
+  { key: 'Vacina (por dose)',        label: 'Vacina (por dose)' },
+  { key: 'Aplicação',               label: 'Aplicação (por procedimento)' },
+]
+
+function loadTabela() {
+  try { return JSON.parse(localStorage.getItem('petvet-tabela-precos') ?? '{}') } catch { return {} }
+}
 
 export default function ConfiguracoesPage() {
   const { identidade, setIdentidade, resetIdentidade } = useIdentidade()
@@ -12,6 +47,15 @@ export default function ConfiguracoesPage() {
   const [cropField, setCropField] = useState(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
+  const [tabela, setTabela] = useState(loadTabela)
+  const [tabelaSaved, setTabelaSaved] = useState(false)
+  const [followupCfg, setFollowupCfg] = useState(loadFollowupConfig)
+  const [followupSaved, setFollowupSaved] = useState(false)
+  const [followupTab, setFollowupTab] = useState('config')
+  const [histFilter, setHistFilter] = useState({ from: '', to: '' })
+  const [queue, setQueue] = useState(loadFollowupQueue)
+  const [newLinkGoogle, setNewLinkGoogle] = useState('')
+  const [newLinkInsta, setNewLinkInsta] = useState('')
 
   // Ref para guardar a identidade salva mais recente (usada no cleanup)
   const savedRef = useRef(identidade)
@@ -46,6 +90,75 @@ export default function ConfiguracoesPage() {
     resetIdentidade()
     setDraft({ ...DEFAULT_IDENTIDADE })
     setShowResetConfirm(false)
+  }
+
+  function handleSaveTabela() {
+    localStorage.setItem('petvet-tabela-precos', JSON.stringify(tabela))
+    setTabelaSaved(true)
+    setTimeout(() => setTabelaSaved(false), 2500)
+  }
+
+  function handleSaveFollowup() {
+    localStorage.setItem(FOLLOWUP_KEY, JSON.stringify(followupCfg))
+    setFollowupSaved(true)
+    setTimeout(() => setFollowupSaved(false), 2500)
+  }
+
+  function setCfg(field, value) { setFollowupCfg(c => ({ ...c, [field]: value })) }
+
+  function addLinkGoogle() {
+    const v = newLinkGoogle.trim()
+    if (!v) return
+    setCfg('linksGoogle', [...(followupCfg.linksGoogle || []), v])
+    setNewLinkGoogle('')
+  }
+  function removeLinkGoogle(i) { setCfg('linksGoogle', followupCfg.linksGoogle.filter((_, idx) => idx !== i)) }
+
+  function addLinkInsta() {
+    const v = newLinkInsta.trim()
+    if (!v) return
+    setCfg('linksInstagram', [...(followupCfg.linksInstagram || []), v])
+    setNewLinkInsta('')
+  }
+  function removeLinkInsta(i) { setCfg('linksInstagram', followupCfg.linksInstagram.filter((_, idx) => idx !== i)) }
+
+  function buildPreview() {
+    let identidade = {}
+    try { identidade = JSON.parse(localStorage.getItem('petvet-identidade') ?? '{}') } catch {}
+    const clinica = identidade.nomeP || draft.nomeP || 'Emporium Vazpet'
+    const g = (followupCfg.linksGoogle || []).join('\n') || '(links do Google aqui)'
+    const i = (followupCfg.linksInstagram || []).join('\n') || '(links do Instagram aqui)'
+    return (followupCfg.mensagemModelo || '')
+      .replace(/\{tutor\}/g, 'João')
+      .replace(/\{pet\}/g, 'Rex')
+      .replace(/\{clinica\}/g, clinica)
+      .replace(/\{links_google\}/g, g)
+      .replace(/\{links_instagram\}/g, i)
+  }
+
+  function getHistoricoFiltrado() {
+    let list = queue.filter(q => q.enviado)
+    if (histFilter.from) list = list.filter(q => q.enviadoEm && q.enviadoEm >= histFilter.from)
+    if (histFilter.to)   list = list.filter(q => q.enviadoEm && q.enviadoEm <= histFilter.to + 'T23:59:59')
+    return list.sort((a, b) => (b.enviadoEm || '').localeCompare(a.enviadoEm || ''))
+  }
+
+  function handleReenviar(item) {
+    let identidade = {}
+    try { identidade = JSON.parse(localStorage.getItem('petvet-identidade') ?? '{}') } catch {}
+    const cfg = loadFollowupConfig()
+    const clinica = identidade.nomeP || 'Emporium Vazpet'
+    const g = (cfg.linksGoogle || []).join('\n')
+    const i = (cfg.linksInstagram || []).join('\n')
+    const msg = (cfg.mensagemModelo || '')
+      .replace(/\{tutor\}/g, item.tutorNome || 'Tutor')
+      .replace(/\{pet\}/g, item.petNome || 'Pet')
+      .replace(/\{clinica\}/g, clinica)
+      .replace(/\{links_google\}/g, g)
+      .replace(/\{links_instagram\}/g, i)
+    const digits = (item.tutorTelefone || '').replace(/\D/g, '')
+    const phone = digits.startsWith('55') && digits.length >= 12 ? digits : '55' + digits
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
   function handleLogoFile(field, file) {
@@ -227,6 +340,240 @@ export default function ConfiguracoesPage() {
           <div style={{ flex: 1, height: 10, borderRadius: 5, background: `linear-gradient(90deg, ${draft.corPrimaria}, ${draft.corDestaque})` }} />
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Gradiente aplicado</span>
         </div>
+      </div>
+
+      {/* Tabela de Preços */}
+      <div className="card" style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: 2 }}>Tabela de Preços</p>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Usada para sugerir valores automaticamente no PDV ao selecionar tutor</p>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={handleSaveTabela}>
+            <Save size={14} /> {tabelaSaved ? 'Salvo!' : 'Salvar tabela'}
+          </button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px 20px' }}>
+          {TABELA_FIELDS.map(({ key, label }) => (
+            <div key={key} className="form-group">
+              <label className="form-label">{label}</label>
+              <div style={{ position: 'relative' }}>
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.875rem', pointerEvents: 'none' }}>R$</span>
+                <input
+                  className="form-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  style={{ paddingLeft: 30 }}
+                  value={tabela[key] ?? ''}
+                  placeholder="0,00"
+                  onChange={e => setTabela(t => ({ ...t, [key]: e.target.value }))}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Follow-up Pós-Consulta */}
+      <div className="card" style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: 2 }}>Follow-up Pós-Consulta</p>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Envio automático de mensagem WhatsApp após consulta concluída</p>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className={`btn btn-sm ${followupTab === 'config' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setFollowupTab('config')}
+            >
+              <Settings2 size={14} /> Configurar
+            </button>
+            <button
+              className={`btn btn-sm ${followupTab === 'historico' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => { setFollowupTab('historico'); setQueue(loadFollowupQueue()) }}
+            >
+              <History size={14} /> Histórico
+            </button>
+          </div>
+        </div>
+
+        {followupTab === 'config' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Toggle ativo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                <div
+                  onClick={() => setCfg('ativo', !followupCfg.ativo)}
+                  style={{
+                    width: 44, height: 24, borderRadius: 12,
+                    background: followupCfg.ativo ? 'var(--teal)' : 'var(--border)',
+                    position: 'relative', cursor: 'pointer', transition: 'background .2s', flexShrink: 0,
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute', top: 3, left: followupCfg.ativo ? 23 : 3,
+                    width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                    transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.25)',
+                  }} />
+                </div>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {followupCfg.ativo ? 'Ativo' : 'Inativo'}
+                </span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 24, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={followupCfg.somAtivo}
+                  onChange={e => setCfg('somAtivo', e.target.checked)}
+                />
+                <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Som de notificação</span>
+              </label>
+            </div>
+
+            {/* Tempo */}
+            <div className="form-group" style={{ maxWidth: 260 }}>
+              <label className="form-label">Enviar após conclusão</label>
+              <select
+                className="form-input"
+                value={followupCfg.tempoMinutos}
+                onChange={e => setCfg('tempoMinutos', Number(e.target.value))}
+              >
+                {TEMPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {/* Links Google */}
+            <div className="form-group">
+              <label className="form-label">Links do Google (avaliações)</label>
+              {(followupCfg.linksGoogle || []).map((l, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ flex: 1, fontSize: '0.8125rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l}</span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => removeLinkGoogle(i)} style={{ color: 'var(--danger)', padding: '2px 6px' }}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                <input
+                  className="form-input"
+                  placeholder="https://g.page/r/..."
+                  value={newLinkGoogle}
+                  onChange={e => setNewLinkGoogle(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addLinkGoogle()}
+                />
+                <button className="btn btn-outline btn-sm" onClick={addLinkGoogle}>Adicionar</button>
+              </div>
+            </div>
+
+            {/* Links Instagram */}
+            <div className="form-group">
+              <label className="form-label">Links do Instagram</label>
+              {(followupCfg.linksInstagram || []).map((l, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ flex: 1, fontSize: '0.8125rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l}</span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => removeLinkInsta(i)} style={{ color: 'var(--danger)', padding: '2px 6px' }}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                <input
+                  className="form-input"
+                  placeholder="https://instagram.com/..."
+                  value={newLinkInsta}
+                  onChange={e => setNewLinkInsta(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addLinkInsta()}
+                />
+                <button className="btn btn-outline btn-sm" onClick={addLinkInsta}>Adicionar</button>
+              </div>
+            </div>
+
+            {/* Mensagem modelo */}
+            <div className="form-group">
+              <label className="form-label">Mensagem modelo</label>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>
+                Variáveis: <code>{'{tutor}'}</code> <code>{'{pet}'}</code> <code>{'{clinica}'}</code> <code>{'{links_google}'}</code> <code>{'{links_instagram}'}</code>
+              </p>
+              <textarea
+                className="form-input"
+                rows={7}
+                style={{ resize: 'vertical', fontFamily: 'inherit' }}
+                value={followupCfg.mensagemModelo}
+                onChange={e => setCfg('mensagemModelo', e.target.value)}
+              />
+            </div>
+
+            {/* Preview */}
+            <div>
+              <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>Preview (tutor: João, pet: Rex)</p>
+              <div style={{
+                background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8,
+                padding: '12px 14px', fontSize: '0.8125rem', color: 'var(--text-primary)',
+                whiteSpace: 'pre-wrap', lineHeight: 1.6,
+              }}>
+                {buildPreview()}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary btn-sm" onClick={handleSaveFollowup}>
+                <Save size={14} /> {followupSaved ? 'Salvo!' : 'Salvar configuração'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {followupTab === 'historico' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Filtro por período */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">De</label>
+                <input type="date" className="form-input" style={{ width: 150 }} value={histFilter.from} onChange={e => setHistFilter(f => ({ ...f, from: e.target.value }))} />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Até</label>
+                <input type="date" className="form-input" style={{ width: 150 }} value={histFilter.to} onChange={e => setHistFilter(f => ({ ...f, to: e.target.value }))} />
+              </div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setHistFilter({ from: '', to: '' })}>Limpar</button>
+            </div>
+
+            {getHistoricoFiltrado().length === 0 ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                Nenhum follow-up enviado no período
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                      {['Tutor', 'Pet', 'Concluído em', 'Enviado em', 'Enviado por', ''].map(h => (
+                        <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getHistoricoFiltrado().map(item => (
+                      <tr key={item.agendamentoId} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '8px 10px', color: 'var(--text-primary)' }}>{item.tutorNome || '—'}</td>
+                        <td style={{ padding: '8px 10px', color: 'var(--text-primary)' }}>{item.petNome || '—'}</td>
+                        <td style={{ padding: '8px 10px', color: 'var(--text-muted)' }}>{fmtDT(item.concluidoEm)}</td>
+                        <td style={{ padding: '8px 10px', color: 'var(--text-muted)' }}>{fmtDT(item.enviadoEm)}</td>
+                        <td style={{ padding: '8px 10px', color: 'var(--text-muted)' }}>{item.enviadoPor || '—'}</td>
+                        <td style={{ padding: '8px 10px' }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => handleReenviar(item)} title="Reenviar WhatsApp">
+                            <MessageCircle size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '12px 16px', background: 'var(--teal-light)', borderRadius: 8, borderLeft: '3px solid var(--teal)' }}>

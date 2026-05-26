@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { IdentidadeProvider } from './context/IdentidadeContext'
+import { FollowupProvider } from './context/FollowupContext'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import MobileNav from './components/MobileNav'
@@ -76,7 +77,9 @@ export default function App() {
     <IdentidadeProvider>
       <ThemeProvider>
         <AuthProvider>
-          <AppShell />
+          <FollowupProvider>
+            <AppShell />
+          </FollowupProvider>
         </AuthProvider>
       </ThemeProvider>
     </IdentidadeProvider>

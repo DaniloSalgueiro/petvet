@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Search, Plus, Minus, Trash2, ShoppingCart, X, Check, Printer } from 'lucide-react'
 import Modal from '../components/ui/Modal'
-import { TUTORES, PRODUTOS, SERVICOS_CATALOGO, LANCAMENTOS } from '../data/mock'
+import { TUTORES, PETS, PRODUTOS, SERVICOS_CATALOGO, LANCAMENTOS } from '../data/mock'
 import { normIncludes } from '../utils/normalizeText'
 import { usePersistentState } from '../hooks/usePersistentState'
 
@@ -17,6 +17,97 @@ const CATALOG_CATS = ['Produtos', 'Serviços', 'Consultas']
 
 function fmtBRL(v) {
   return `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+}
+
+function fmtDate(iso) {
+  return new Date(iso + 'T00:00').toLocaleDateString('pt-BR')
+}
+
+function todayISO() {
+  return new Date().toISOString().split('T')[0]
+}
+
+function yesterdayISO() {
+  const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]
+}
+
+function daysAgoISO(n) {
+  const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split('T')[0]
+}
+
+// Mapeia tipoConsulta → chave da tabela de preços
+const CONSULTA_TABELA_KEY = {
+  'Consulta Clínica Geral':  'Consulta Clínica Geral',
+  'Consulta Dermatológica':  'Consulta Dermatológica',
+  'Consulta Canábica':       'Consulta Canábica',
+  'Retorno':                 'Retorno',
+}
+
+/**
+ * Busca preço em ordem de prioridade: Tabela → Estoque → Catálogo → Bulário
+ * Retorna { price: Number, source: string } ou null se não encontrar.
+ */
+function buscarPreco(searchName, tipo, produtosList, tabela) {
+  const toNum = v => { const n = Number(v); return isNaN(n) || n <= 0 ? null : n }
+  const matchProd = name => produtosList.find(p =>
+    normIncludes(p.name, name) || normIncludes(name, p.name)
+  )
+  const matchServ = name => SERVICOS_CATALOGO.find(s =>
+    normIncludes(s.name, name) || normIncludes(name, s.name)
+  )
+
+  if (tipo === 'consulta') {
+    const tKey = CONSULTA_TABELA_KEY[searchName] ?? searchName
+    const tv = toNum(tabela[tKey])
+    if (tv !== null) return { price: tv, source: 'Tabela' }
+    const srv = matchServ(searchName)
+    const sv = toNum(srv?.price)
+    if (sv !== null) return { price: sv, source: 'Catálogo' }
+    return null
+  }
+
+  if (tipo === 'vacina') {
+    const prod = matchProd(searchName)
+    const pv = toNum(prod?.salePrice ?? prod?.price)
+    if (pv !== null) return { price: pv, source: 'Estoque' }
+    const tv = toNum(tabela['Vacina (por dose)'])
+    if (tv !== null) return { price: tv, source: 'Tabela' }
+    return null
+  }
+
+  if (tipo === 'aplicacao') {
+    const prod = matchProd(searchName)
+    const pv = toNum(prod?.salePrice ?? prod?.price)
+    if (pv !== null) return { price: pv, source: 'Estoque' }
+    try {
+      const bulario = JSON.parse(localStorage.getItem('petvet-bulario') ?? '[]')
+      const bula = bulario.find(m =>
+        normIncludes(m.nomeComercial ?? '', searchName) || normIncludes(searchName, m.nomeComercial ?? '') ||
+        normIncludes(m.nomeGenerico ?? '', searchName) || normIncludes(searchName, m.nomeGenerico ?? '')
+      )
+      const bv = toNum(bula?.price ?? bula?.preco)
+      if (bv !== null) return { price: bv, source: 'Bulário' }
+    } catch {}
+    const tv = toNum(tabela['Aplicação'])
+    if (tv !== null) return { price: tv, source: 'Tabela' }
+    return null
+  }
+
+  if (tipo === 'prescricao') {
+    const prod = matchProd(searchName)
+    const pv = toNum(prod?.salePrice ?? prod?.price)
+    if (pv !== null) return { price: pv, source: 'Estoque' }
+    return null
+  }
+
+  if (tipo === 'servico') {
+    const srv = matchServ(searchName)
+    const sv = toNum(srv?.price)
+    if (sv !== null) return { price: sv, source: 'Catálogo' }
+    return null
+  }
+
+  return null
 }
 
 export default function PDVPage({ navigateTo }) {
@@ -35,6 +126,15 @@ export default function PDVPage({ navigateTo }) {
   const [produtos, setProdutos] = usePersistentState('petvet-produtos', PRODUTOS)
   const [lancamentos, setLancamentos] = usePersistentState('petvet-lancamentos', LANCAMENTOS)
   const [vendas, setVendas] = usePersistentState('petvet-vendas', [])
+  const [prontuarioSugg, setProntuarioSugg] = useState(null)
+  const [showPrModal, setShowPrModal] = useState(false)
+  const [suggestedItems, setSuggestedItems] = useState([])
+  const [activePetId, setActivePetId] = useState(null)
+  const [prActiveDate, setPrActiveDate] = useState(todayISO)
+  const [expandedDates, setExpandedDates] = useState(() => new Set([todayISO()]))
+  const [showPeriodPicker, setShowPeriodPicker] = useState(false)
+  const [prPeriodFrom, setPrPeriodFrom] = useState('')
+  const [prPeriodTo, setPrPeriodTo] = useState('')
 
   const tutorResults = tutorSearch.length >= 2
     ? TUTORES.filter(t => normIncludes(t.name, tutorSearch) || t.cpf.includes(tutorSearch))
@@ -61,6 +161,146 @@ export default function PDVPage({ navigateTo }) {
     }
     return items
   }, [catalogTab, catalogSearch, produtos])
+
+  function buildProntuarioSugg(tutorObj, { dateFrom, dateTo } = {}) {
+    try {
+      const all = JSON.parse(localStorage.getItem('petvet-prontuarios') ?? '[]')
+      const tabela = JSON.parse(localStorage.getItem('petvet-tabela-precos') ?? '{}')
+      const tutorPets = PETS.filter(p => p.tutorId === tutorObj.id)
+      const today = todayISO()
+      const from = dateFrom ?? daysAgoISO(30)
+      const to = dateTo ?? today
+
+      // Para cada pet, pega TODOS os prontuários não-cancelados no intervalo
+      const petsWithPrs = tutorPets.flatMap(pet => {
+        const prs = all
+          .filter(pr => pr.petId === pet.id && pr.status !== 'cancelado' && pr.date >= from && pr.date <= to)
+          .sort((a, b) => b.date.localeCompare(a.date))
+        return prs.length ? [{ pet, prs }] : []
+      })
+      if (!petsWithPrs.length) return null
+
+      const mkItem = (found, base) => ({
+        ...base,
+        price: found?.price ?? 0,
+        editPrice: found ? String(found.price) : '',
+        priceSource: found?.source ?? null,
+      })
+
+      const allItems = []
+      for (const { pet, prs } of petsWithPrs) {
+        for (const pr of prs) {
+          const prDate = pr.date
+          const isToday = prDate === today
+
+          const consultaNome = pr.tipoConsulta ?? 'Consulta Clínica Geral'
+          allItems.push(mkItem(
+            buscarPreco(consultaNome, 'consulta', produtos, tabela),
+            { id: `pr-consulta-${pr.id}`, name: consultaNome, origin: 'Consulta', petId: pet.id, petName: pet.name, prDate, checked: isToday }
+          ))
+
+          for (let i = 0; i < (pr.vacinasAplicadas ?? []).length; i++) {
+            const v = pr.vacinasAplicadas[i]
+            const nome = v.vacina === 'Outra' ? (v.vacinaOutra || 'Vacina') : (v.vacina || 'Vacina')
+            allItems.push(mkItem(
+              buscarPreco(nome, 'vacina', produtos, tabela),
+              { id: `pr-vacina-${pr.id}-${i}`, name: nome, origin: 'Vacina', petId: pet.id, petName: pet.name, prDate, checked: isToday }
+            ))
+          }
+
+          for (let i = 0; i < (pr.aplicacoes ?? []).length; i++) {
+            const a = pr.aplicacoes[i]
+            const displayName = [a.nome, a.dose].filter(Boolean).join(' — ') || 'Aplicação'
+            allItems.push(mkItem(
+              buscarPreco(a.nome || displayName, 'aplicacao', produtos, tabela),
+              { id: `pr-apl-${pr.id}-${i}`, name: displayName, origin: 'Aplicação', petId: pet.id, petName: pet.name, prDate, checked: isToday }
+            ))
+          }
+
+          for (let i = 0; i < (pr.prescricao?.medicamentos ?? []).length; i++) {
+            const m = pr.prescricao.medicamentos[i]
+            if (!m.nome) continue
+            allItems.push(mkItem(
+              buscarPreco(m.nome, 'prescricao', produtos, tabela),
+              { id: `pr-med-${pr.id}-${i}`, name: [m.nome, m.dose].filter(Boolean).join(' — '), origin: 'Prescrição', petId: pet.id, petName: pet.name, prDate, checked: false }
+            ))
+          }
+        }
+      }
+
+      if (!allItems.length) return null
+      const uniquePets = [...new Map(petsWithPrs.map(x => [x.pet.id, x.pet])).values()]
+      return { pets: uniquePets, items: allItems }
+    } catch { return null }
+  }
+
+  function selectTutor(t) {
+    const today = todayISO()
+    setTutor(t)
+    setTutorSearch('')
+    setShowTutorDropdown(false)
+    const sugg = buildProntuarioSugg(t)
+    setProntuarioSugg(sugg)
+    setSuggestedItems(sugg?.items ?? [])
+    setActivePetId(sugg?.pets?.[0]?.id ?? null)
+    setPrActiveDate(today)
+    setExpandedDates(new Set([today]))
+    setShowPeriodPicker(false)
+    setPrPeriodFrom('')
+    setPrPeriodTo('')
+  }
+
+  function clearTutor() {
+    setTutor(null)
+    setTutorSearch('')
+    setProntuarioSugg(null)
+    setSuggestedItems([])
+    setActivePetId(null)
+    setShowPrModal(false)
+    setShowPeriodPicker(false)
+  }
+
+  function toggleSuggItem(id) {
+    setSuggestedItems(prev => prev.map(it => it.id === id ? { ...it, checked: !it.checked } : it))
+  }
+
+  function updateSuggPrice(id, val) {
+    setSuggestedItems(prev => prev.map(it => it.id === id ? { ...it, editPrice: val } : it))
+  }
+
+  function toggleAllForDate(date, filterPetId) {
+    const groupItems = suggestedItems.filter(it => it.prDate === date && (!filterPetId || it.petId === filterPetId))
+    const allChecked = groupItems.every(it => it.checked)
+    const ids = new Set(groupItems.map(it => it.id))
+    setSuggestedItems(prev => prev.map(it => ids.has(it.id) ? { ...it, checked: !allChecked } : it))
+  }
+
+  function toggleDateExpand(date) {
+    setExpandedDates(prev => {
+      const next = new Set(prev)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      return next
+    })
+  }
+
+  function handleSearchPeriod() {
+    if (!tutor || !prPeriodFrom || !prPeriodTo) return
+    const sugg = buildProntuarioSugg(tutor, { dateFrom: prPeriodFrom, dateTo: prPeriodTo })
+    setProntuarioSugg(sugg)
+    setSuggestedItems(sugg?.items ?? [])
+    const dates = new Set((sugg?.items ?? []).map(it => it.prDate))
+    setExpandedDates(dates)
+    setShowPeriodPicker(false)
+  }
+
+  function addSuggestedToCart() {
+    suggestedItems.filter(it => it.checked).forEach(it => {
+      const price = it.editPrice !== '' ? Number(it.editPrice) : it.price
+      addToCart({ id: it.id, name: it.name, category: it.origin, price, unit: 'un', stock: 999, source: 'servico' })
+    })
+    setShowPrModal(false)
+  }
 
   function addToCart(item) {
     setCart(prev => {
@@ -178,13 +418,38 @@ export default function PDVPage({ navigateTo }) {
           <div className="card" style={{ padding: '14px 16px', position: 'relative' }}>
             <p style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 8 }}>Cliente / Tutor</p>
             {tutor ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{tutor.name}</p>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{tutor.cpf} · {tutor.phone}</p>
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{tutor.name}</p>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{tutor.cpf} · {tutor.phone}</p>
+                  </div>
+                  <button className="btn btn-ghost btn-sm" onClick={clearTutor}><X size={14} /></button>
                 </div>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setTutor(null); setTutorSearch('') }}><X size={14} /></button>
-              </div>
+                {prontuarioSugg && (() => {
+                  const today = todayISO()
+                  const yesterday = yesterdayISO()
+                  const dateMap = {}
+                  prontuarioSugg.items.forEach(it => { dateMap[it.prDate] = (dateMap[it.prDate] ?? 0) + 1 })
+                  const parts = Object.entries(dateMap)
+                    .sort(([a], [b]) => b.localeCompare(a))
+                    .map(([date, cnt]) => {
+                      const label = date === today ? 'hoje' : date === yesterday ? 'ontem' : fmtDate(date)
+                      return `${cnt} ${cnt === 1 ? 'item' : 'itens'} de ${label}`
+                    })
+                  const badgeText = parts.slice(0, 2).join(' · ') + (parts.length > 2 ? ` +${parts.length - 2}` : '')
+                  return (
+                    <button
+                      onClick={() => setShowPrModal(true)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, width: '100%', padding: '8px 12px', borderRadius: 8, border: '1.5px solid #16a34a', background: '#f0fdf4', cursor: 'pointer', color: '#15803d', fontWeight: 600, fontSize: '0.8125rem' }}
+                    >
+                      <span>🩺</span>
+                      <span style={{ flex: 1 }}>{badgeText}</span>
+                      <span style={{ fontSize: '0.72rem', opacity: 0.7 }}>Revisar →</span>
+                    </button>
+                  )
+                })()}
+              </>
             ) : (
               <>
                 <div style={{ position: 'relative' }}>
@@ -204,7 +469,7 @@ export default function PDVPage({ navigateTo }) {
                         <div
                           key={t.id}
                           style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
-                          onMouseDown={() => { setTutor(t); setTutorSearch(''); setShowTutorDropdown(false) }}
+                          onMouseDown={() => selectTutor(t)}
                           onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
                           onMouseLeave={e => e.currentTarget.style.background = ''}
                         >
@@ -221,7 +486,7 @@ export default function PDVPage({ navigateTo }) {
                   value=""
                   onChange={e => {
                     const found = TUTORES.find(t => t.id === e.target.value)
-                    if (found) { setTutor(found); setTutorSearch(''); setShowTutorDropdown(false) }
+                    if (found) selectTutor(found)
                   }}
                 >
                   <option value="">— ou selecione da lista completa —</option>
@@ -441,6 +706,204 @@ export default function PDVPage({ navigateTo }) {
           )}
         </div>
       </div>
+
+      {/* Prontuário Suggestions Modal */}
+      {showPrModal && prontuarioSugg && (() => {
+        const today = todayISO()
+        const yesterday = yesterdayISO()
+        const multiplePets = prontuarioSugg.pets.length > 1
+        const filterPetId = multiplePets ? activePetId : null
+
+        // Agrupar por data (respeitando filtro de pet)
+        const groupMap = {}
+        for (const it of suggestedItems) {
+          if (filterPetId && it.petId !== filterPetId) continue
+          if (!groupMap[it.prDate]) groupMap[it.prDate] = []
+          groupMap[it.prDate].push(it)
+        }
+        const dateGroups = Object.entries(groupMap)
+          .sort(([a], [b]) => b.localeCompare(a))
+          .map(([date, items]) => ({ date, items }))
+
+        const checkedCount = suggestedItems.filter(it => it.checked).length
+
+        const ORIGIN_COLOR = {
+          Consulta:   { bg: '#e0f2fe', color: '#0369a1' },
+          Vacina:     { bg: '#dcfce7', color: '#15803d' },
+          Aplicação:  { bg: '#fef9c3', color: '#854d0e' },
+          Prescrição: { bg: '#f3e8ff', color: '#7e22ce' },
+        }
+
+        const dateLabelFull = date =>
+          date === today    ? `Hoje — ${fmtDate(date)}` :
+          date === yesterday? `Ontem — ${fmtDate(date)}` :
+                              `📅 ${fmtDate(date)}`
+
+        const renderItem = item => {
+          const oc = ORIGIN_COLOR[item.origin] ?? { bg: 'var(--surface-2)', color: 'var(--text-secondary)' }
+          return (
+            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: `1.5px solid ${item.checked ? 'var(--teal)' : 'var(--border)'}`, background: item.checked ? 'var(--teal-light)' : 'var(--surface-2)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={item.checked} onChange={() => toggleSuggItem(item.id)} style={{ accentColor: 'var(--teal)', width: 15, height: 15, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: item.checked ? 600 : 400, color: 'var(--text-primary)', lineHeight: 1.3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                {multiplePets && !filterPetId && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.petName}</span>}
+              </div>
+              <span style={{ padding: '2px 7px', borderRadius: 10, fontSize: '0.68rem', fontWeight: 700, background: oc.bg, color: oc.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{item.origin}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                {item.priceSource && <span style={{ fontSize: '0.62rem', padding: '1px 4px', borderRadius: 5, background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)', lineHeight: 1.4 }}>{item.priceSource}</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>R$</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={item.editPrice} placeholder="Informar"
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => { e.stopPropagation(); updateSuggPrice(item.id, e.target.value) }}
+                    style={{ width: 66, padding: '2px 5px', border: `1px solid ${item.editPrice === '' ? 'var(--warning)' : 'var(--border)'}`, borderRadius: 5, fontSize: '0.78rem', textAlign: 'right', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+            </label>
+          )
+        }
+
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 14, width: '100%', maxWidth: 580, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+
+              {/* Header */}
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.1rem' }}>🩺</span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9375rem' }}>Itens do Atendimento</p>
+                  <p style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>Prontuários de {tutor?.name}</p>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowPrModal(false)}><X size={15} /></button>
+              </div>
+
+              {/* Filtro de data */}
+              <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Exibindo:</span>
+                <input
+                  type="date"
+                  value={prActiveDate}
+                  className="form-input"
+                  style={{ flex: 1, minWidth: 130, padding: '4px 8px', fontSize: '0.8rem' }}
+                  onChange={e => {
+                    setPrActiveDate(e.target.value)
+                    setExpandedDates(new Set([e.target.value]))
+                  }}
+                />
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => { const t = todayISO(); setPrActiveDate(t); setExpandedDates(new Set([t])) }}
+                  style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}
+                >
+                  Hoje
+                </button>
+              </div>
+
+              {/* Pet chips (múltiplos pets) */}
+              {multiplePets && (
+                <div style={{ padding: '8px 18px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setActivePetId(null)}
+                    style={{ padding: '3px 12px', borderRadius: 16, border: `1.5px solid ${!filterPetId ? 'var(--teal)' : 'var(--border)'}`, background: !filterPetId ? 'var(--teal-light)' : 'var(--surface-2)', color: !filterPetId ? 'var(--teal)' : 'var(--text-secondary)', fontWeight: !filterPetId ? 700 : 400, fontSize: '0.78rem', cursor: 'pointer' }}
+                  >Todos</button>
+                  {prontuarioSugg.pets.map(pet => (
+                    <button
+                      key={pet.id}
+                      onClick={() => setActivePetId(pet.id)}
+                      style={{ padding: '3px 12px', borderRadius: 16, border: `1.5px solid ${filterPetId === pet.id ? 'var(--teal)' : 'var(--border)'}`, background: filterPetId === pet.id ? 'var(--teal-light)' : 'var(--surface-2)', color: filterPetId === pet.id ? 'var(--teal)' : 'var(--text-secondary)', fontWeight: filterPetId === pet.id ? 700 : 400, fontSize: '0.78rem', cursor: 'pointer' }}
+                    >
+                      {pet.photo && <img src={pet.photo} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', marginRight: 4, verticalAlign: 'middle' }} />}
+                      {pet.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Grupos por data */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '10px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {dateGroups.length === 0 && (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', textAlign: 'center', padding: '20px 0' }}>
+                    Nenhum atendimento encontrado neste período.
+                  </p>
+                )}
+                {dateGroups.map(({ date, items: groupItems }) => {
+                  const isExp = expandedDates.has(date)
+                  const allCk = groupItems.every(it => it.checked)
+                  const someCk = groupItems.some(it => it.checked)
+                  const isToday = date === today
+                  const isYest = date === yesterday
+                  return (
+                    <div key={date} style={{ borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden' }}>
+                      {/* Cabeçalho do grupo */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: isToday ? 'var(--teal-light)' : 'var(--surface-2)', borderBottom: isExp ? '1px solid var(--border)' : 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={someCk}
+                          onChange={() => toggleAllForDate(date, filterPetId)}
+                          style={{ accentColor: 'var(--teal)', width: 15, height: 15, flexShrink: 0, opacity: someCk && !allCk ? 0.6 : 1 }}
+                        />
+                        <button
+                          onClick={() => toggleDateExpand(date)}
+                          style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}
+                        >
+                          <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: isToday ? 'var(--teal)' : 'var(--text-primary)' }}>
+                            {isToday ? '📅 Hoje' : isYest ? '📅 Ontem' : '📅'} — {fmtDate(date)}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', background: 'var(--surface)', padding: '1px 6px', borderRadius: 10, border: '1px solid var(--border)' }}>
+                            {groupItems.length} item(s)
+                          </span>
+                          <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{isExp ? '▲' : '▼'}</span>
+                        </button>
+                        <span style={{ fontSize: '0.72rem', color: isToday ? 'var(--teal)' : 'var(--text-muted)', fontWeight: someCk ? 600 : 400 }}>
+                          {someCk ? `${groupItems.filter(it => it.checked).length}/${groupItems.length} sel.` : 'Selecionar todos'}
+                        </span>
+                      </div>
+                      {/* Itens do grupo */}
+                      {isExp && (
+                        <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {groupItems.map(renderItem)}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* Ver outros períodos */}
+                <div style={{ borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setShowPeriodPicker(v => !v)}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'var(--surface-2)', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}
+                  >
+                    <span>🔍</span>
+                    <span style={{ flex: 1, textAlign: 'left' }}>Ver outros períodos</span>
+                    <span>{showPeriodPicker ? '▲' : '▼'}</span>
+                  </button>
+                  {showPeriodPicker && (
+                    <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <input type="date" value={prPeriodFrom} onChange={e => setPrPeriodFrom(e.target.value)} className="form-input" style={{ flex: 1, minWidth: 120, padding: '4px 8px', fontSize: '0.8rem' }} />
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>até</span>
+                      <input type="date" value={prPeriodTo} onChange={e => setPrPeriodTo(e.target.value)} className="form-input" style={{ flex: 1, minWidth: 120, padding: '4px 8px', fontSize: '0.8rem' }} />
+                      <button className="btn btn-outline btn-sm" onClick={handleSearchPeriod} disabled={!prPeriodFrom || !prPeriodTo} style={{ whiteSpace: 'nowrap', fontSize: '0.78rem' }}>Buscar</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', flex: 1 }}>{checkedCount} item(s) selecionado(s)</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowPrModal(false)}>Fechar</button>
+                <button className="btn btn-primary btn-sm" disabled={checkedCount === 0} onClick={addSuggestedToCart}>
+                  Adicionar ao carrinho
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Receipt Modal */}
       {receiptData && (

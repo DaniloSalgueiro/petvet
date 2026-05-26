@@ -3,6 +3,18 @@ import { USUARIOS } from '../data/mock'
 
 const AuthContext = createContext(null)
 const DEFAULT_PASSWORD = '123456'
+const DELETED_KEY = 'petvet-usuarios-deletados'
+
+function getDeletedIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(DELETED_KEY) ?? '[]')) } catch { return new Set() }
+}
+
+export function markUserDeleted(id) {
+  try {
+    const ids = JSON.parse(localStorage.getItem(DELETED_KEY) ?? '[]')
+    if (!ids.includes(id)) localStorage.setItem(DELETED_KEY, JSON.stringify([...ids, id]))
+  } catch {}
+}
 
 function getStoredUsers() {
   try {
@@ -24,17 +36,20 @@ function savePasswordMap(map) {
 }
 
 function initializeAuthStorage() {
-  // Garante que todos os usuários do mock estão no storage (corrige dados corrompidos/desatualizados)
+  // Garante que usuários do mock estão no storage, EXCETO os explicitamente deletados
   try {
     const storedRaw = localStorage.getItem('petvet-usuarios')
     if (storedRaw) {
       const stored = JSON.parse(storedRaw)
       if (!Array.isArray(stored)) throw new Error('invalid')
       const storedById = Object.fromEntries(stored.map(u => [u.id, u]))
-      const missingMockUser = USUARIOS.some(u => !storedById[u.id])
+      const deletedIds = getDeletedIds()
+      // Apenas reinsere mock users que não foram deletados e estão faltando
+      const activeMockUsers = USUARIOS.filter(u => !deletedIds.has(u.id))
+      const missingMockUser = activeMockUsers.some(u => !storedById[u.id])
       if (missingMockUser) {
         const extra = stored.filter(u => !USUARIOS.find(m => m.id === u.id))
-        localStorage.setItem('petvet-usuarios', JSON.stringify([...USUARIOS, ...extra]))
+        localStorage.setItem('petvet-usuarios', JSON.stringify([...activeMockUsers, ...extra]))
       }
     }
   } catch {

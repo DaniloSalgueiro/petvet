@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react'
 import { Search, Plus, ChevronRight, X, Edit2, AlertCircle, Loader2, Sparkles, Trash2 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import { PETS, TUTORES, AGENDAMENTOS, PRONTUARIOS, getTutorById } from '../data/mock'
+import { findVetById } from '../utils/getVeterinarios'
 import { calcularIdade } from '../utils/calcularIdade'
 import { useAuth } from '../context/AuthContext'
 import { normIncludes, norm } from '../utils/normalizeText'
@@ -597,7 +598,7 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
                   <tr key={a.id}>
                     <td>{new Date(a.date + 'T00:00').toLocaleDateString('pt-BR')}</td>
                     <td style={{ textTransform: 'capitalize' }}>{a.type}</td>
-                    <td>{a.vetId === 'v1' ? 'Dra. Tatiana Borges' : 'Dr. Carlos Menezes'}</td>
+                    <td>{findVetById(a.vetId)?.name ?? '—'}</td>
                     <td><span className={`badge badge-${STATUS_COLOR[a.status]}`}>{STATUS_LABEL[a.status]}</span></td>
                   </tr>
                 ))}
@@ -626,7 +627,7 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginLeft: 10 }}>{pr.diagnostico.definitivo || pr.diagnostico.presuntivo}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="badge badge-teal">{pr.vetId === 'v1' ? 'Dra. Tatiana' : 'Dr. Carlos'}</span>
+                  <span className="badge badge-teal">{findVetById(pr.vetId)?.name ?? '—'}</span>
                   {navigateTo && <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />}
                 </div>
               </div>

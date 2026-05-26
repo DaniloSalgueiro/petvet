@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Syringe, Plus, Trash2, Check } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import Modal from '../components/ui/Modal'
-import { PETS, VETS } from '../data/mock'
+import { PETS } from '../data/mock'
+import { getVeterinarios } from '../utils/getVeterinarios'
 import { useAuth } from '../context/AuthContext'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { normIncludes } from '../utils/normalizeText'
@@ -429,7 +430,7 @@ export default function VacinaProtocoloPage() {
               <label className="form-label">Veterinário</label>
               <select className="form-select" value={appForm.vet} onChange={e => setAppForm(f => ({ ...f, vet: e.target.value }))}>
                 <option value="">— Selecione —</option>
-                {VETS.map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
+                {getVeterinarios().map(v => <option key={v.id} value={v.name}>{v.name}</option>)}
               </select>
             </div>
           </div>

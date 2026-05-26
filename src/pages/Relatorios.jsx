@@ -4,11 +4,12 @@ import {
   DollarSign, Briefcase, TrendingUp, Printer, Download, ChevronLeft,
 } from 'lucide-react'
 import {
-  PETS as PD, TUTORES as TD, VETS,
+  PETS as PD, TUTORES as TD,
   PRONTUARIOS as PRD, AGENDAMENTOS as AGD,
   HOSPEDAGENS as HD, PRODUTOS as PROD,
   LANCAMENTOS as LD,
 } from '../data/mock'
+import { getVeterinarios, findVetById } from '../utils/getVeterinarios'
 import { useAuth } from '../context/AuthContext'
 import { normIncludes } from '../utils/normalizeText'
 
@@ -348,7 +349,7 @@ function ReportView({ id, data }) {
 
 function toPet(pets, id) { return pets.find(p => p.id === id) }
 function toTutor(tutores, id) { return tutores.find(t => t.id === id) }
-function toVet(id) { return VETS.find(v => v.id === id) }
+function toVet(id) { return findVetById(id) }
 function calcDiarias(h) {
   const ci = new Date(h.checkIn + 'T12:00'), co = new Date(h.checkOut + 'T12:00')
   return Math.max(1, Math.round((co - ci) / 86400000))
@@ -488,7 +489,7 @@ function RProntPorVet({ prontuarios, pets, tutores }) {
     <Fil>
       <Sel label="Veterinário" value={f.vetId} onChange={e=>set('vetId',e.target.value)}>
         <option value="">Todos</option>
-        {VETS.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}
+        {getVeterinarios().map(v=><option key={v.id} value={v.id}>{v.name}</option>)}
       </Sel>
     </Fil>
     <ActBar count={rows.length} onPrint={()=>printReport('Prontuários por Veterinário',tblHtml(heads,tblRows))} onCSV={()=>exportCSV('pront-por-vet',heads,tblRows)}/>
@@ -878,7 +879,7 @@ function RComissoes({ lancamentos }) {
   const [f, set] = useFilters('comissoes', { mes:thisMonth() })
   const rows = useMemo(() => {
     const month = lancamentos.filter(l=>l.type==='receita'&&l.date.slice(0,7)===f.mes&&l.status==='recebido')
-    return VETS.map(v => {
+    return getVeterinarios().map(v => {
       const sub = month.filter(l=>l.description?.toLowerCase().includes(v.name.split(' ').pop()?.toLowerCase())).reduce((s,l)=>s+l.value, 0)
       return sub>0 ? { vet:v.name, sub, c10:sub*0.1, c15:sub*0.15 } : null
     }).filter(Boolean)
@@ -995,11 +996,11 @@ function RVetTop({ agendamentos, prontuarios, lancamentos }) {
   const rows = useMemo(() => {
     const agMes = agendamentos.filter(a=>a.date.slice(0,7)===f.mes&&a.status!=='cancelado')
     const lancMes = lancamentos.filter(l=>l.type==='receita'&&l.date.slice(0,7)===f.mes)
-    return VETS.map(v => {
+    return getVeterinarios().map(v => {
       const atend = agMes.filter(a=>a.vetId===v.id).length
       const prMes = prontuarios.filter(pr=>pr.vetId===v.id&&pr.date.slice(0,7)===f.mes).length
       const recEst = lancMes.filter(l=>l.description?.toLowerCase().includes(v.name.split(' ').pop()?.toLowerCase())).reduce((s,l)=>s+l.value, 0)
-      return [v.name, v.specialty, atend, prMes, R(recEst)]
+      return [v.name, v.specialty || '—', atend, prMes, R(recEst)]
     })
   }, [agendamentos, prontuarios, lancamentos, f])
   const heads = ['Veterinário','Especialidade','Agendamentos','Prontuários','Receita Est.']
