@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, X } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
-import { AGENDAMENTOS, PETS, getPetById, getTutorById } from '../data/mock'
+import { AGENDAMENTOS, PETS, TUTORES } from '../data/mock'
 import { getVeterinarios, findVetById } from '../utils/getVeterinarios'
 import { useAuth } from '../context/AuthContext'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { useFollowup } from '../context/FollowupContext'
+import { normIncludes } from '../utils/normalizeText'
 
 const BATH_TYPES = ['banho', 'sobanho', 'tosa']
 
@@ -36,6 +37,7 @@ const EMPTY_APT = {
   petId: '', tutorId: '', vetId: '', banistaId: '',
   date: '', time: '09:00', duration: 30,
   type: 'consulta', status: 'agendado', notes: '',
+  tipoAtendimento: 'presencial', enderecoAtendimento: '',
 }
 
 function dateStr(y, m, d) {
@@ -138,6 +140,9 @@ export default function AgendaPage({ navParams = {} }) {
   const [selectedDay, setSelectedDay] = useState(today.getDate())
   const [rawAgendamentos, setAgendamentos] = usePersistentState('petvet-agendamentos', AGENDAMENTOS)
   const [funcionarios] = usePersistentState('petvet-funcionarios', [])
+  const [petsLS] = usePersistentState('petvet-pets', PETS)
+  const [tutoresLS] = usePersistentState('petvet-tutores', TUTORES)
+  const [petSearch, setPetSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editingApt, setEditingApt] = useState(null)
   const [form, setForm] = useState(EMPTY_APT)
@@ -147,12 +152,20 @@ export default function AgendaPage({ navParams = {} }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [mobileView, setMobileView] = useState('lista')
   const [conflictWarning, setConflictWarning] = useState(null)
+  const [showMapMenu, setShowMapMenu] = useState(false)
   const timeInputRef = useRef(null)
 
   const agendamentos = Array.isArray(rawAgendamentos) ? rawAgendamentos : []
   const vets = getVeterinarios()
   const banhistas = (funcionarios || []).filter(f => f.apareceAgenda && f.ativo !== false)
   const hasActiveFilters = statusFilter !== 'todos' || typeFilter !== 'todos' || profFilter !== 'todos'
+
+  const allPetsList = [...PETS, ...(Array.isArray(petsLS) ? petsLS.filter(p => !PETS.find(mp => mp.id === p.id)) : [])]
+  const allTutoresList = [...TUTORES, ...(Array.isArray(tutoresLS) ? tutoresLS.filter(t => !TUTORES.find(mt => mt.id === t.id)) : [])]
+  const petsMap = new Map(allPetsList.map(p => [p.id, p]))
+  const tutoresMap = new Map(allTutoresList.map(t => [t.id, t]))
+  const getPetByIdComp = id => (id ? petsMap.get(id) ?? null : null)
+  const getTutorByIdComp = id => (id ? tutoresMap.get(id) ?? null : null)
 
   function clearFilters() {
     setStatusFilter('todos')
@@ -185,6 +198,9 @@ export default function AgendaPage({ navParams = {} }) {
         type: navParams.type ?? 'consulta',
         date: dateStr(today.getFullYear(), today.getMonth(), today.getDate()),
       })
+      const allPetsM = Array.isArray(petsLS) ? petsLS : PETS
+      const pet = allPetsM.find(p => p.id === navParams.petId)
+      setPetSearch(pet?.name ?? '')
       setShowModal(true)
     }
   }, [navParams.petId, navParams.openNew, navParams.type])
@@ -217,12 +233,16 @@ export default function AgendaPage({ navParams = {} }) {
   function openNew() {
     setEditingApt(null)
     setForm({ ...EMPTY_APT, date: dateStr(year, month, selectedDay) })
+    setPetSearch('')
     setShowModal(true)
   }
 
   function openEdit(apt) {
     setEditingApt(apt)
     setForm({ ...apt })
+    const allPetsM = Array.isArray(petsLS) ? petsLS : PETS
+    const pet = allPetsM.find(p => p.id === apt.petId)
+    setPetSearch(pet?.name ?? '')
     setShowModal(true)
   }
 
@@ -266,9 +286,15 @@ export default function AgendaPage({ navParams = {} }) {
   }
 
   function saveApt() {
+    const pet = getPetByIdComp(form.petId)
+    const tutor = pet ? getTutorByIdComp(pet.tutorId) : null
     const data = {
       ...form,
-      tutorId: PETS.find(p => p.id === form.petId)?.tutorId ?? form.tutorId,
+      petName: pet?.name ?? form.petName ?? '',
+      petSpecies: pet?.species ?? form.petSpecies ?? '',
+      tutorId: pet?.tutorId ?? form.tutorId ?? '',
+      tutorName: tutor?.name ?? form.tutorName ?? '',
+      tutorPhone: tutor?.phone ?? form.tutorPhone ?? '',
     }
     const conflict = findConflict(data)
     if (conflict) {
@@ -391,8 +417,10 @@ export default function AgendaPage({ navParams = {} }) {
           ) : (
             <div className="agenda-list-items" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {monthApts.map(apt => {
-                const pet = getPetById(apt.petId)
-                const tutor = pet ? getTutorById(pet.tutorId) : null
+                const pet = getPetByIdComp(apt.petId)
+                const tutor = apt.tutorId ? getTutorByIdComp(apt.tutorId) : (pet ? getTutorByIdComp(pet.tutorId) : null)
+                const petName = apt.petName || pet?.name || '?'
+                const tutorName = apt.tutorName || tutor?.name || '—'
                 const cfg = TYPE_CONFIG[apt.type] ?? TYPE_CONFIG.outros
                 const stCfg = STATUS_CONFIG[apt.status] ?? STATUS_CONFIG.agendado
                 const profName = getProfissionalName(apt)
@@ -406,13 +434,21 @@ export default function AgendaPage({ navParams = {} }) {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <div>
                         <p style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
-                          {apt.date.split('-').reverse().join('/')} {apt.time} · {pet?.name ?? '?'}
+                          {apt.date.split('-').reverse().join('/')} {apt.time} · {petName}
                         </p>
                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                          {cfg.label} · {tutor?.name ?? '—'}{profName ? ` · ${profName}` : ''}
+                          {cfg.label} · {tutorName}{profName ? ` · ${profName}` : ''}
                         </p>
+                        {apt.tipoAtendimento === 'domiciliar' && apt.enderecoAtendimento && (
+                          <p style={{ fontSize: '0.72rem', color: 'var(--teal)', marginTop: 1 }}>📍 {apt.enderecoAtendimento}</p>
+                        )}
                       </div>
-                      <span className={`badge badge-${stCfg.color}`} style={{ fontSize: '0.65rem', flexShrink: 0 }}>{stCfg.label}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+                        {apt.tipoAtendimento === 'domiciliar' && (
+                          <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, background: '#e6f0ff', color: '#1a5fb4', fontWeight: 600, border: '1px solid #a3c3ef' }}>🏠 Dom.</span>
+                        )}
+                        <span className={`badge badge-${stCfg.color}`} style={{ fontSize: '0.65rem' }}>{stCfg.label}</span>
+                      </div>
                     </div>
                   </div>
                 )
@@ -491,7 +527,7 @@ export default function AgendaPage({ navParams = {} }) {
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                               borderLeft: `2px solid ${cfg.color}`,
                             }}>
-                              {a.time} {getPetById(a.petId)?.name ?? '?'}
+                              {a.time} {a.petName || getPetByIdComp(a.petId)?.name || '?'}
                             </div>
                           )
                         })}
@@ -536,8 +572,10 @@ export default function AgendaPage({ navParams = {} }) {
             ) : (
               <div className="agenda-day-items" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {selectedApts.map(apt => {
-                  const pet = getPetById(apt.petId)
-                  const tutor = pet ? getTutorById(pet.tutorId) : null
+                  const pet = getPetByIdComp(apt.petId)
+                  const tutor = apt.tutorId ? getTutorByIdComp(apt.tutorId) : (pet ? getTutorByIdComp(pet.tutorId) : null)
+                  const petName = apt.petName || pet?.name || '?'
+                  const tutorName = apt.tutorName || tutor?.name || '—'
                   const cfg = TYPE_CONFIG[apt.type] ?? TYPE_CONFIG.outros
                   const stCfg = STATUS_CONFIG[apt.status] ?? STATUS_CONFIG.agendado
                   const profName = getProfissionalName(apt)
@@ -548,8 +586,11 @@ export default function AgendaPage({ navParams = {} }) {
                       onClick={() => hasRole('admin', 'atendente', 'veterinario') && openEdit(apt)}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{apt.time} · {pet?.name ?? '?'}</span>
+                        <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{apt.time} · {petName}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {apt.tipoAtendimento === 'domiciliar' && (
+                            <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, background: '#e6f0ff', color: '#1a5fb4', fontWeight: 600, border: '1px solid #a3c3ef' }}>🏠 Dom.</span>
+                          )}
                           <span className={`badge badge-${stCfg.color}`} style={{ fontSize: '0.65rem' }}>{stCfg.label}</span>
                           {hasRole('admin') && (
                             <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)', padding: 2 }}
@@ -560,9 +601,15 @@ export default function AgendaPage({ navParams = {} }) {
                         </div>
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                        {cfg.label} · {tutor?.name ?? '—'}
+                        {cfg.label} · {tutorName}
                         {profName && <span style={{ color: 'var(--text-secondary)' }}> · {profName}</span>}
                       </div>
+                      {apt.tipoAtendimento === 'domiciliar' && apt.enderecoAtendimento && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--teal)', marginTop: 2, cursor: 'pointer', textDecoration: 'underline' }}
+                          onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(apt.enderecoAtendimento)}`, '_blank') }}>
+                          📍 {apt.enderecoAtendimento}
+                        </div>
+                      )}
                       {apt.status === 'agendado' && hasRole('admin', 'atendente') && (
                         <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                           <button className="btn btn-outline btn-sm" style={{ fontSize: '0.7rem', padding: '3px 8px' }} onClick={e => { e.stopPropagation(); updateStatus(apt.id, 'confirmado') }}>Confirmar</button>
@@ -659,13 +706,42 @@ export default function AgendaPage({ navParams = {} }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group">
             <label className="form-label">Pet *</label>
-            <select className="form-select" value={form.petId} onChange={e => setForm(f => ({ ...f, petId: e.target.value }))}>
-              <option value="">Selecione</option>
-              {PETS.map(p => {
-                const t = getTutorById(p.tutorId)
-                return <option key={p.id} value={p.id}>{p.name} ({t?.name ?? ''})</option>
-              })}
-            </select>
+            {(() => {
+              const allPetsM = Array.isArray(petsLS) ? petsLS : PETS
+              const allTutoresM = Array.isArray(tutoresLS) ? tutoresLS : TUTORES
+              const sortedPetsM = [...allPetsM].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'pt-BR'))
+              const filteredPetsM = petSearch.trim()
+                ? sortedPetsM.filter(p => {
+                    const t = allTutoresM.find(tt => tt.id === p.tutorId)
+                    return normIncludes(p.name ?? '', petSearch) || normIncludes(t?.name ?? '', petSearch) || normIncludes(p.breed ?? '', petSearch)
+                  })
+                : sortedPetsM
+              const selPetM = allPetsM.find(p => p.id === form.petId)
+              const selTutorM = selPetM ? allTutoresM.find(t => t.id === selPetM.tutorId) : null
+              const SPECIES_EMOJI = { 'Cão': '🐶', 'Gato': '🐱', 'Peixe': '🐟', 'Pássaro': '🐦', 'Coelho': '🐰', 'Réptil': '🦎', 'Outro': '🐾' }
+              return (
+                <>
+                  <input className="form-input" placeholder="Digite o nome do pet ou tutor..."
+                    value={petSearch} onChange={e => setPetSearch(e.target.value)}
+                    style={{ marginBottom: 4 }} />
+                  <select className="form-select" value={form.petId}
+                    onChange={e => {
+                      const pet = sortedPetsM.find(p => p.id === e.target.value)
+                      setForm(f => ({ ...f, petId: e.target.value }))
+                      if (pet) setPetSearch(pet.name)
+                    }}>
+                    <option value="">Selecione</option>
+                    {filteredPetsM.map(p => {
+                      const t = allTutoresM.find(tt => tt.id === p.tutorId)
+                      const emoji = SPECIES_EMOJI[p.species] ?? '🐾'
+                      return <option key={p.id} value={p.id}>{emoji} {p.name} — {p.breed ?? p.species ?? ''} · Tutor: {t?.name ?? '—'}</option>
+                    })}
+                  </select>
+                  {petSearch.trim() && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{filteredPetsM.length} pet{filteredPetsM.length !== 1 ? 's' : ''} encontrado{filteredPetsM.length !== 1 ? 's' : ''}</span>}
+                  {selTutorM && <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>Tutor: <strong>{selTutorM.name}</strong>{selTutorM.phone ? ` · ${selTutorM.phone}` : ''}</p>}
+                </>
+              )
+            })()}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div className="form-group">
@@ -724,6 +800,50 @@ export default function AgendaPage({ navParams = {} }) {
             <label className="form-label">Observações</label>
             <textarea className="form-textarea" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Observações do agendamento..." style={{ minHeight: 60 }} />
           </div>
+
+          <div className="form-group">
+            <label className="form-label">Tipo de atendimento</label>
+            <div style={{ display: 'flex', gap: 20 }}>
+              {[{ v: 'presencial', l: '🏥 Presencial' }, { v: 'domiciliar', l: '🏠 Domiciliar' }].map(({ v, l }) => (
+                <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                  <input type="radio" checked={(form.tipoAtendimento ?? 'presencial') === v}
+                    onChange={() => setForm(f => {
+                      const allPets = Array.isArray(petsLS) ? petsLS : PETS
+                      const allTutores = Array.isArray(tutoresLS) ? tutoresLS : TUTORES
+                      const tutor = allTutores.find(t => t.id === allPets.find(p => p.id === f.petId)?.tutorId)
+                      return { ...f, tipoAtendimento: v, enderecoAtendimento: v === 'domiciliar' ? (tutor?.address ?? '') : f.enderecoAtendimento }
+                    })} />
+                  {l}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {form.tipoAtendimento === 'domiciliar' && (
+            <div className="form-group">
+              <label className="form-label">Endereço de atendimento</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input className="form-input" value={form.enderecoAtendimento ?? ''} onChange={e => setForm(f => ({ ...f, enderecoAtendimento: e.target.value }))} placeholder="Rua, número, bairro, cidade" />
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <button type="button" className="btn btn-outline btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => setShowMapMenu(v => !v)}>📍 Mapa</button>
+                  {showMapMenu && form.enderecoAtendimento && (
+                    <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 200, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-md)', padding: 4, minWidth: 150, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {[
+                        { l: 'Google Maps', url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.enderecoAtendimento)}` },
+                        { l: 'Waze',        url: `https://waze.com/ul?q=${encodeURIComponent(form.enderecoAtendimento)}` },
+                        { l: 'Apple Maps',  url: `maps://maps.apple.com/?q=${encodeURIComponent(form.enderecoAtendimento)}` },
+                      ].map(({ l, url }) => (
+                        <button key={l} className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start', fontSize: '0.8125rem' }}
+                          onClick={() => { window.open(url, '_blank'); setShowMapMenu(false) }}>
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
     </div>

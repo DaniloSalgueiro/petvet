@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Shield, Clock, Trash2, RotateCcw } from 'lucide-react'
+import { maskCPF, maskPhone } from '../utils/masks'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Tabs from '../components/ui/Tabs'
@@ -14,25 +15,64 @@ const ROLE_CONFIG = {
 }
 
 const MODULE_LABELS = {
-  dashboard:  'Dashboard',
-  pets:       'Pets & Tutores',
-  prontuario: 'Prontuário',
-  agenda:     'Agenda',
-  estoque:    'Estoque',
-  servicos:   'Serviços',
-  financeiro: 'Financeiro',
-  usuarios:   'Usuários',
+  dashboard:           'Dashboard',
+  pets:                'Pets & Tutores',
+  prontuario:          'Prontuário',
+  agenda:              'Agenda',
+  estoque:             'Estoque',
+  servicos:            'Serviços',
+  financeiro:          'Financeiro',
+  relatorios:          'Relatórios',
+  bulario:             'Bulário',
+  usuarios:            'Usuários',
+  funcionarios:        'Funcionários',
+  racas:               'Raças',
+  'prontuario-config': 'Config. Prontuário',
+  configuracoes:       'Configurações',
+  followup:            'Follow-up',
 }
 
 const P = (view, edit, del) => ({ view, edit, delete: del })
 const DEFAULT_PERMISSIONS = {
-  admin:       Object.fromEntries(Object.keys(MODULE_LABELS).map(m => [m, P(true, true, true)])),
-  veterinario: { dashboard: P(true,false,false), pets: P(true,true,false), prontuario: P(true,true,false), agenda: P(true,true,false), estoque: P(true,false,false), servicos: P(true,false,false), financeiro: P(false,false,false), usuarios: P(false,false,false) },
-  atendente:   { dashboard: P(true,false,false), pets: P(true,true,false), prontuario: P(false,false,false), agenda: P(true,true,false), estoque: P(true,true,false), servicos: P(true,true,false), financeiro: P(false,false,false), usuarios: P(false,false,false) },
+  admin: Object.fromEntries(Object.keys(MODULE_LABELS).map(m => [m, P(true, true, true)])),
+  veterinario: {
+    dashboard:           P(true,  false, false),
+    pets:                P(true,  true,  false),
+    prontuario:          P(true,  true,  false),
+    agenda:              P(true,  true,  false),
+    estoque:             P(true,  false, false),
+    servicos:            P(true,  false, false),
+    financeiro:          P(false, false, false),
+    relatorios:          P(true,  false, false),
+    bulario:             P(true,  true,  false),
+    usuarios:            P(false, false, false),
+    funcionarios:        P(false, false, false),
+    racas:               P(false, false, false),
+    'prontuario-config': P(false, false, false),
+    configuracoes:       P(false, false, false),
+    followup:            P(false, false, false),
+  },
+  atendente: {
+    dashboard:           P(true,  false, false),
+    pets:                P(true,  true,  false),
+    prontuario:          P(false, false, false),
+    agenda:              P(true,  true,  false),
+    estoque:             P(true,  true,  false),
+    servicos:            P(true,  true,  false),
+    financeiro:          P(false, false, false),
+    relatorios:          P(false, false, false),
+    bulario:             P(false, false, false),
+    usuarios:            P(false, false, false),
+    funcionarios:        P(false, false, false),
+    racas:               P(false, false, false),
+    'prontuario-config': P(false, false, false),
+    configuracoes:       P(false, false, false),
+    followup:            P(false, false, false),
+  },
 }
 
 const EMPTY_USER = {
-  name: '', email: '', role: 'atendente', crmv: '', mapa: '', active: true,
+  name: '', email: '', role: 'atendente', cpf: '', phone: '', crmv: '', mapa: '', active: true,
   permissions: { ...DEFAULT_PERMISSIONS.atendente },
 }
 
@@ -388,6 +428,14 @@ export default function UsuariosPage() {
             <div className="form-group">
               <label className="form-label">E-mail *</label>
               <input type="email" className="form-input" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">CPF</label>
+              <input className="form-input" value={form.cpf ?? ''} onChange={e => setForm(f => ({ ...f, cpf: maskCPF(e.target.value) }))} placeholder="000.000.000-00" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Telefone</label>
+              <input className="form-input" value={form.phone ?? ''} onChange={e => setForm(f => ({ ...f, phone: maskPhone(e.target.value) }))} placeholder="(11) 99999-9999" />
             </div>
             <div className="form-group">
               <label className="form-label">Perfil</label>

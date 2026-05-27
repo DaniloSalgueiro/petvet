@@ -35,43 +35,57 @@ function daysAgoISO(n) {
   const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split('T')[0]
 }
 
-// Mapeia tipoConsulta → chave da tabela de preços
-const CONSULTA_TABELA_KEY = {
-  'Consulta Clínica Geral':  'Consulta Clínica Geral',
-  'Consulta Dermatológica':  'Consulta Dermatológica',
-  'Consulta Canábica':       'Consulta Canábica',
-  'Retorno':                 'Retorno',
-}
-
 /**
- * Busca preço em ordem de prioridade: Tabela → Estoque → Catálogo → Bulário
- * Retorna { price: Number, source: string } ou null se não encontrar.
+ * Busca preço em ordem de prioridade: Protocolo/Estoque/Catálogo/Bulário
+ * Retorna { price: Number, source: string, domFallback?: boolean } ou null.
+ * Para consulta/servico domiciliar: tenta petvet-servicos-domicilio antes do catálogo.
  */
-function buscarPreco(searchName, tipo, produtosList, tabela) {
+function buscarPreco(searchName, tipo, produtosList, tipoAtendimento = 'presencial') {
   const toNum = v => { const n = Number(v); return isNaN(n) || n <= 0 ? null : n }
   const matchProd = name => produtosList.find(p =>
     normIncludes(p.name, name) || normIncludes(name, p.name)
   )
-  const matchServ = name => SERVICOS_CATALOGO.find(s =>
+  const getSvcs = () => {
+    try { return JSON.parse(localStorage.getItem('petvet-catalogo') ?? '[]') } catch { return [] }
+  }
+  const getDomSvcs = () => {
+    try { return JSON.parse(localStorage.getItem('petvet-servicos-domicilio') ?? '[]') } catch { return [] }
+  }
+  const matchServ = name => getSvcs().find(s =>
+    normIncludes(s.name, name) || normIncludes(name, s.name)
+  )
+  const matchDomServ = name => getDomSvcs().find(s =>
     normIncludes(s.name, name) || normIncludes(name, s.name)
   )
 
   if (tipo === 'consulta') {
-    const tKey = CONSULTA_TABELA_KEY[searchName] ?? searchName
-    const tv = toNum(tabela[tKey])
-    if (tv !== null) return { price: tv, source: 'Tabela' }
+    if (tipoAtendimento === 'domiciliar') {
+      const domSrv = matchDomServ(searchName)
+      const dv = toNum(domSrv?.price)
+      if (dv !== null) return { price: dv, source: 'Domiciliar' }
+      const srv = matchServ(searchName)
+      const sv = toNum(srv?.price)
+      if (sv !== null) return { price: sv, source: 'Serviço', domFallback: true }
+      return null
+    }
     const srv = matchServ(searchName)
     const sv = toNum(srv?.price)
-    if (sv !== null) return { price: sv, source: 'Catálogo' }
+    if (sv !== null) return { price: sv, source: 'Serviço' }
     return null
   }
 
   if (tipo === 'vacina') {
+    try {
+      const protocols = JSON.parse(localStorage.getItem('petvet-vac-protocols') ?? '[]')
+      const proto = protocols.find(p =>
+        normIncludes(p.name, searchName) || normIncludes(searchName, p.name)
+      )
+      const pv = toNum(proto?.precoTotal)
+      if (pv !== null) return { price: pv, source: 'Protocolo', proto }
+    } catch {}
     const prod = matchProd(searchName)
     const pv = toNum(prod?.salePrice ?? prod?.price)
     if (pv !== null) return { price: pv, source: 'Estoque' }
-    const tv = toNum(tabela['Vacina (por dose)'])
-    if (tv !== null) return { price: tv, source: 'Tabela' }
     return null
   }
 
@@ -88,8 +102,6 @@ function buscarPreco(searchName, tipo, produtosList, tabela) {
       const bv = toNum(bula?.price ?? bula?.preco)
       if (bv !== null) return { price: bv, source: 'Bulário' }
     } catch {}
-    const tv = toNum(tabela['Aplicação'])
-    if (tv !== null) return { price: tv, source: 'Tabela' }
     return null
   }
 
@@ -101,9 +113,18 @@ function buscarPreco(searchName, tipo, produtosList, tabela) {
   }
 
   if (tipo === 'servico') {
+    if (tipoAtendimento === 'domiciliar') {
+      const domSrv = matchDomServ(searchName)
+      const dv = toNum(domSrv?.price)
+      if (dv !== null) return { price: dv, source: 'Domiciliar' }
+      const srv = matchServ(searchName)
+      const sv = toNum(srv?.price)
+      if (sv !== null) return { price: sv, source: 'Serviço', domFallback: true }
+      return null
+    }
     const srv = matchServ(searchName)
     const sv = toNum(srv?.price)
-    if (sv !== null) return { price: sv, source: 'Catálogo' }
+    if (sv !== null) return { price: sv, source: 'Serviço' }
     return null
   }
 
@@ -124,6 +145,10 @@ export default function PDVPage({ navigateTo }) {
   const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [receiptData, setReceiptData] = useState(null)
   const [produtos, setProdutos] = usePersistentState('petvet-produtos', PRODUTOS)
+  const [servicos] = usePersistentState('petvet-catalogo', SERVICOS_CATALOGO)
+  const [servicosDomicilio] = usePersistentState('petvet-servicos-domicilio', [])
+  const [tipoAtend, setTipoAtend] = useState('presencial')
+  const [tipoAtendDetected, setTipoAtendDetected] = useState(false)
   const [lancamentos, setLancamentos] = usePersistentState('petvet-lancamentos', LANCAMENTOS)
   const [vendas, setVendas] = usePersistentState('petvet-vendas', [])
   const [prontuarioSugg, setProntuarioSugg] = useState(null)
@@ -132,6 +157,7 @@ export default function PDVPage({ navigateTo }) {
   const [activePetId, setActivePetId] = useState(null)
   const [prActiveDate, setPrActiveDate] = useState(todayISO)
   const [expandedDates, setExpandedDates] = useState(() => new Set([todayISO()]))
+  const [expandedProtos, setExpandedProtos] = useState(() => new Set())
   const [showPeriodPicker, setShowPeriodPicker] = useState(false)
   const [prPeriodFrom, setPrPeriodFrom] = useState('')
   const [prPeriodTo, setPrPeriodTo] = useState('')
@@ -147,25 +173,34 @@ export default function PDVPage({ navigateTo }) {
       items = produtos
         .filter(p => p.salePrice > 0 && p.quantity > 0)
         .map(p => ({ id: p.id, name: p.name, category: p.category, price: p.salePrice, unit: p.unit, stock: p.quantity, source: 'produto' }))
-    } else if (catalogTab === 'Serviços') {
-      items = SERVICOS_CATALOGO
-        .filter(s => s.price > 0 && !['Consulta'].includes(s.category))
-        .map(s => ({ id: s.id, name: s.name, category: s.category, price: s.price, unit: 'un', stock: 999, source: 'servico' }))
     } else {
-      items = SERVICOS_CATALOGO
-        .filter(s => s.category === 'Consulta')
-        .map(s => ({ id: s.id, name: s.name, category: s.category, price: s.price, unit: 'un', stock: 999, source: 'servico' }))
+      const baseFilter = catalogTab === 'Serviços'
+        ? s => s.price > 0 && s.category !== 'Consulta'
+        : s => s.category === 'Consulta'
+      const baseServicos = servicos.filter(baseFilter)
+
+      if (tipoAtend === 'domiciliar') {
+        const domList = Array.isArray(servicosDomicilio) ? servicosDomicilio : []
+        items = baseServicos.map(s => {
+          const domSvc = domList.find(d => normIncludes(d.name, s.name) || normIncludes(s.name, d.name))
+          if (domSvc) {
+            return { id: domSvc.id ?? `dom-${domSvc.name}`, name: domSvc.name, category: domSvc.category, price: domSvc.price, unit: 'un', stock: 999, source: 'servico', domSource: 'domiciliar' }
+          }
+          return { id: s.id ?? `svc-${s.name}`, name: s.name, category: s.category, price: s.price, unit: 'un', stock: 999, source: 'servico', domSource: 'fallback' }
+        })
+      } else {
+        items = baseServicos.map(s => ({ id: s.id ?? `svc-${s.name}`, name: s.name, category: s.category, price: s.price, unit: 'un', stock: 999, source: 'servico' }))
+      }
     }
     if (catalogSearch) {
       items = items.filter(i => normIncludes(i.name, catalogSearch) || normIncludes(i.category, catalogSearch))
     }
     return items
-  }, [catalogTab, catalogSearch, produtos])
+  }, [catalogTab, catalogSearch, produtos, servicos, servicosDomicilio, tipoAtend])
 
   function buildProntuarioSugg(tutorObj, { dateFrom, dateTo } = {}) {
     try {
       const all = JSON.parse(localStorage.getItem('petvet-prontuarios') ?? '[]')
-      const tabela = JSON.parse(localStorage.getItem('petvet-tabela-precos') ?? '{}')
       const tutorPets = PETS.filter(p => p.tutorId === tutorObj.id)
       const today = todayISO()
       const from = dateFrom ?? daysAgoISO(30)
@@ -185,7 +220,13 @@ export default function PDVPage({ navigateTo }) {
         price: found?.price ?? 0,
         editPrice: found ? String(found.price) : '',
         priceSource: found?.source ?? null,
+        proto: found?.proto ?? null,
+        domFallback: found?.domFallback ?? false,
       })
+
+      const agendamentos = (() => {
+        try { return JSON.parse(localStorage.getItem('petvet-agendamentos') ?? '[]') } catch { return [] }
+      })()
 
       const allItems = []
       for (const { pet, prs } of petsWithPrs) {
@@ -193,9 +234,12 @@ export default function PDVPage({ navigateTo }) {
           const prDate = pr.date
           const isToday = prDate === today
 
+          const apt = agendamentos.find(a => a.petId === pet.id && a.date === prDate)
+          const tipoAtend = apt?.tipoAtendimento ?? 'presencial'
+
           const consultaNome = pr.tipoConsulta ?? 'Consulta Clínica Geral'
           allItems.push(mkItem(
-            buscarPreco(consultaNome, 'consulta', produtos, tabela),
+            buscarPreco(consultaNome, 'consulta', produtos, tipoAtend),
             { id: `pr-consulta-${pr.id}`, name: consultaNome, origin: 'Consulta', petId: pet.id, petName: pet.name, prDate, checked: isToday }
           ))
 
@@ -203,7 +247,7 @@ export default function PDVPage({ navigateTo }) {
             const v = pr.vacinasAplicadas[i]
             const nome = v.vacina === 'Outra' ? (v.vacinaOutra || 'Vacina') : (v.vacina || 'Vacina')
             allItems.push(mkItem(
-              buscarPreco(nome, 'vacina', produtos, tabela),
+              buscarPreco(nome, 'vacina', produtos),
               { id: `pr-vacina-${pr.id}-${i}`, name: nome, origin: 'Vacina', petId: pet.id, petName: pet.name, prDate, checked: isToday }
             ))
           }
@@ -212,7 +256,7 @@ export default function PDVPage({ navigateTo }) {
             const a = pr.aplicacoes[i]
             const displayName = [a.nome, a.dose].filter(Boolean).join(' — ') || 'Aplicação'
             allItems.push(mkItem(
-              buscarPreco(a.nome || displayName, 'aplicacao', produtos, tabela),
+              buscarPreco(a.nome || displayName, 'aplicacao', produtos),
               { id: `pr-apl-${pr.id}-${i}`, name: displayName, origin: 'Aplicação', petId: pet.id, petName: pet.name, prDate, checked: isToday }
             ))
           }
@@ -221,8 +265,23 @@ export default function PDVPage({ navigateTo }) {
             const m = pr.prescricao.medicamentos[i]
             if (!m.nome) continue
             allItems.push(mkItem(
-              buscarPreco(m.nome, 'prescricao', produtos, tabela),
+              buscarPreco(m.nome, 'prescricao', produtos),
               { id: `pr-med-${pr.id}-${i}`, name: [m.nome, m.dose].filter(Boolean).join(' — '), origin: 'Prescrição', petId: pet.id, petName: pet.name, prDate, checked: false }
+            ))
+          }
+
+          for (let i = 0; i < (pr.procedimentos ?? []).length; i++) {
+            const proc = pr.procedimentos[i]
+            const nome = proc.servicoId === '__outro' ? proc.nome : (proc.nome || proc.servicoId || '')
+            if (!nome) continue
+            const vetSuffix = proc.vetNome ? ` — Dr(a). ${proc.vetNome}` : ''
+            const displayName = nome + vetSuffix
+            const priceFound = proc.preco > 0
+              ? { price: Number(proc.preco), source: 'Cirurgia' }
+              : buscarPreco(nome, 'servico', produtos, tipoAtend)
+            allItems.push(mkItem(
+              priceFound,
+              { id: `pr-cirurgia-${pr.id}-${i}`, name: displayName, origin: 'Cirurgia', petId: pet.id, petName: pet.name, prDate, checked: isToday }
             ))
           }
         }
@@ -245,9 +304,23 @@ export default function PDVPage({ navigateTo }) {
     setActivePetId(sugg?.pets?.[0]?.id ?? null)
     setPrActiveDate(today)
     setExpandedDates(new Set([today]))
+    setExpandedProtos(new Set())
     setShowPeriodPicker(false)
     setPrPeriodFrom('')
     setPrPeriodTo('')
+    // Detect tipoAtendimento from today's agendamento
+    try {
+      const apts = JSON.parse(localStorage.getItem('petvet-agendamentos') ?? '[]')
+      const allPetsRaw = JSON.parse(localStorage.getItem('petvet-pets') ?? '[]')
+      const petIds = new Set((Array.isArray(allPetsRaw) ? allPetsRaw : PETS).filter(p => p.tutorId === t.id).map(p => p.id))
+      const todayApt = apts.find(a => a.date === today && petIds.has(a.petId))
+      if (todayApt?.tipoAtendimento) {
+        setTipoAtend(todayApt.tipoAtendimento)
+        setTipoAtendDetected(true)
+      } else {
+        setTipoAtendDetected(false)
+      }
+    } catch { setTipoAtendDetected(false) }
   }
 
   function clearTutor() {
@@ -258,6 +331,9 @@ export default function PDVPage({ navigateTo }) {
     setActivePetId(null)
     setShowPrModal(false)
     setShowPeriodPicker(false)
+    setExpandedProtos(new Set())
+    setTipoAtend('presencial')
+    setTipoAtendDetected(false)
   }
 
   function toggleSuggItem(id) {
@@ -516,10 +592,28 @@ export default function PDVPage({ navigateTo }) {
               ))}
             </div>
 
+            {/* Tipo de atendimento toggle */}
+            <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Atendimento:</span>
+              {[
+                { id: 'presencial', label: '🏥 Consultório' },
+                { id: 'domiciliar', label: '🏠 Domicílio' },
+              ].map(({ id, label }) => (
+                <button key={id} onClick={() => { setTipoAtend(id); setTipoAtendDetected(false) }}
+                  style={{
+                    fontSize: '0.72rem', fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                    background: tipoAtend === id ? (id === 'domiciliar' ? '#fef3c7' : 'var(--teal-light)') : 'var(--surface-2)',
+                    color: tipoAtend === id ? (id === 'domiciliar' ? '#92400e' : 'var(--teal-dark, var(--teal))') : 'var(--text-muted)',
+                    boxShadow: tipoAtend === id ? 'var(--shadow-sm)' : 'none',
+                  }}>{label}</button>
+              ))}
+              {tipoAtendDetected && <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>detectado automaticamente</span>}
+            </div>
+
             <div style={{ padding: '12px 14px' }}>
               <div style={{ position: 'relative', marginBottom: 12 }}>
                 <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <input className="form-input" style={{ paddingLeft: 32 }} placeholder="Buscar no catálogo..." value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)} />
+                <input className="form-input" style={{ paddingLeft: 32 }} placeholder="Buscar no consultório..." value={catalogSearch} onChange={e => setCatalogSearch(e.target.value)} />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
@@ -527,11 +621,15 @@ export default function PDVPage({ navigateTo }) {
                   <button
                     key={item.id}
                     onClick={() => addToCart(item)}
-                    style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: '1.5px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', transition: 'all 150ms' }}
+                    style={{ textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: `1.5px solid ${item.domSource === 'fallback' ? '#fbbf24' : 'var(--border)'}`, background: 'var(--surface)', cursor: 'pointer', transition: 'all 150ms' }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--teal)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = item.domSource === 'fallback' ? '#fbbf24' : 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
                   >
-                    <p style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-primary)', marginBottom: 2 }}>{item.name}</p>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 4, marginBottom: 2 }}>
+                      <p style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-primary)', flex: 1, lineHeight: 1.3 }}>{item.name}</p>
+                      {item.domSource === 'domiciliar' && <span style={{ fontSize: '0.6rem', background: '#fef3c7', color: '#92400e', padding: '1px 4px', borderRadius: 3, flexShrink: 0 }}>🏠 Dom.</span>}
+                      {item.domSource === 'fallback' && <span style={{ fontSize: '0.6rem', background: '#fef3c7', color: '#b45309', padding: '1px 4px', borderRadius: 3, flexShrink: 0 }}>⚠️ Preço consultório</span>}
+                    </div>
                     <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 4 }}>{item.category}{item.source === 'produto' ? ` · Estq: ${item.stock}` : ''}</p>
                     <p style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--teal)' }}>{fmtBRL(item.price)}</p>
                   </button>
@@ -560,7 +658,7 @@ export default function PDVPage({ navigateTo }) {
               <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                 <ShoppingCart size={28} style={{ margin: '0 auto 8px', opacity: 0.3 }} />
                 <p>Carrinho vazio</p>
-                <p style={{ fontSize: '0.75rem' }}>Clique nos itens do catálogo para adicionar</p>
+                <p style={{ fontSize: '0.75rem' }}>Clique nos itens do consultório para adicionar</p>
               </div>
             ) : (
               <div style={{ maxHeight: 300, overflowY: 'auto' }}>
@@ -732,6 +830,7 @@ export default function PDVPage({ navigateTo }) {
           Vacina:     { bg: '#dcfce7', color: '#15803d' },
           Aplicação:  { bg: '#fef9c3', color: '#854d0e' },
           Prescrição: { bg: '#f3e8ff', color: '#7e22ce' },
+          Cirurgia:   { bg: '#fee2e2', color: '#b91c1c' },
         }
 
         const dateLabelFull = date =>
@@ -741,28 +840,73 @@ export default function PDVPage({ navigateTo }) {
 
         const renderItem = item => {
           const oc = ORIGIN_COLOR[item.origin] ?? { bg: 'var(--surface-2)', color: 'var(--text-secondary)' }
+          const isExpProto = !!item.proto && expandedProtos.has(item.id)
+          const toggleProtoExpand = e => {
+            e.stopPropagation()
+            setExpandedProtos(prev => {
+              const next = new Set(prev)
+              if (next.has(item.id)) next.delete(item.id)
+              else next.add(item.id)
+              return next
+            })
+          }
+          const borderColor = item.checked ? 'var(--teal)' : 'var(--border)'
+          const protoSubItems = item.proto ? [
+            ...(item.proto.vacinas ?? []).map(v => ({ nome: v.nome || 'Vacina', tipo: 'Vacina', total: (Number(v.precoUnit) || 0) * (Number(v.qtd) || 1) })),
+            ...(item.proto.medicamentos ?? []).map(m => ({ nome: m.nome || 'Medicamento', tipo: 'Medicamento', total: (Number(m.precoUnit) || 0) * (Number(m.qtd) || 1) })),
+            ...(item.proto.servicos ?? []).map(s => ({ nome: s.nome || 'Serviço', tipo: 'Serviço', total: (Number(s.precoUnit) || 0) * (Number(s.qtd) || 1) })),
+          ] : []
           return (
-            <label key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: `1.5px solid ${item.checked ? 'var(--teal)' : 'var(--border)'}`, background: item.checked ? 'var(--teal-light)' : 'var(--surface-2)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={item.checked} onChange={() => toggleSuggItem(item.id)} style={{ accentColor: 'var(--teal)', width: 15, height: 15, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: item.checked ? 600 : 400, color: 'var(--text-primary)', lineHeight: 1.3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                {multiplePets && !filterPetId && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.petName}</span>}
+            <div key={item.id}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: item.proto && isExpProto ? '8px 8px 0 0' : 8, border: `1.5px solid ${borderColor}`, borderBottom: item.proto && isExpProto ? '1px dashed var(--border)' : `1.5px solid ${borderColor}`, background: item.checked ? 'var(--teal-light)' : 'var(--surface-2)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={item.checked} onChange={() => toggleSuggItem(item.id)} style={{ accentColor: 'var(--teal)', width: 15, height: 15, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: item.checked ? 600 : 400, color: 'var(--text-primary)', lineHeight: 1.3, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                    {multiplePets && !filterPetId && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{item.petName}</span>}
+                  </div>
+                  <span style={{ padding: '2px 7px', borderRadius: 10, fontSize: '0.68rem', fontWeight: 700, background: oc.bg, color: oc.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{item.origin}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                    {item.domFallback && <span title="Preço domiciliar não cadastrado — usando preço do catálogo" style={{ fontSize: '0.62rem', padding: '1px 4px', borderRadius: 5, background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24', lineHeight: 1.4 }}>⚠️ sem dom.</span>}
+                    {item.priceSource && <span style={{ fontSize: '0.62rem', padding: '1px 4px', borderRadius: 5, background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)', lineHeight: 1.4 }}>{item.priceSource}</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>R$</span>
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={item.editPrice} placeholder="Informar"
+                        onClick={e => e.stopPropagation()}
+                        onChange={e => { e.stopPropagation(); updateSuggPrice(item.id, e.target.value) }}
+                        style={{ width: 66, padding: '2px 5px', border: `1px solid ${item.editPrice === '' ? 'var(--warning)' : 'var(--border)'}`, borderRadius: 5, fontSize: '0.78rem', textAlign: 'right', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                  </div>
+                </label>
+                {item.proto && (
+                  <button
+                    onClick={toggleProtoExpand}
+                    title={isExpProto ? 'Ocultar itens do protocolo' : 'Ver itens do protocolo'}
+                    style={{ padding: '5px 8px', border: `1.5px solid ${borderColor}`, borderRadius: 7, background: isExpProto ? 'var(--teal-light)' : 'var(--surface-2)', fontSize: '0.68rem', cursor: 'pointer', color: isExpProto ? 'var(--teal)' : 'var(--text-muted)', flexShrink: 0, lineHeight: 1, fontWeight: 700 }}
+                  >
+                    {isExpProto ? '▲' : '▼'}
+                  </button>
+                )}
               </div>
-              <span style={{ padding: '2px 7px', borderRadius: 10, fontSize: '0.68rem', fontWeight: 700, background: oc.bg, color: oc.color, flexShrink: 0, whiteSpace: 'nowrap' }}>{item.origin}</span>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
-                {item.priceSource && <span style={{ fontSize: '0.62rem', padding: '1px 4px', borderRadius: 5, background: 'var(--surface-2)', color: 'var(--text-muted)', border: '1px solid var(--border)', lineHeight: 1.4 }}>{item.priceSource}</span>}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>R$</span>
-                  <input
-                    type="number" min="0" step="0.01"
-                    value={item.editPrice} placeholder="Informar"
-                    onClick={e => e.stopPropagation()}
-                    onChange={e => { e.stopPropagation(); updateSuggPrice(item.id, e.target.value) }}
-                    style={{ width: 66, padding: '2px 5px', border: `1px solid ${item.editPrice === '' ? 'var(--warning)' : 'var(--border)'}`, borderRadius: 5, fontSize: '0.78rem', textAlign: 'right', background: 'var(--surface)', color: 'var(--text-primary)' }}
-                  />
+              {item.proto && isExpProto && (
+                <div style={{ border: `1.5px solid ${borderColor}`, borderTop: 'none', borderRadius: '0 0 8px 8px', background: 'var(--surface)', padding: '6px 12px 8px' }}>
+                  {protoSubItems.length === 0
+                    ? <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Protocolo sem itens detalhados.</p>
+                    : protoSubItems.map((sub, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--text-secondary)', padding: '3px 0', borderBottom: idx < protoSubItems.length - 1 ? '1px dashed var(--border)' : 'none' }}>
+                        <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>↳</span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.nome}</span>
+                        <span style={{ opacity: 0.55, whiteSpace: 'nowrap', fontSize: '0.68rem' }}>{sub.tipo}</span>
+                        {sub.total > 0 && <span style={{ fontWeight: 600, color: 'var(--teal)', whiteSpace: 'nowrap' }}>R$ {sub.total.toFixed(2)}</span>}
+                      </div>
+                    ))
+                  }
                 </div>
-              </div>
-            </label>
+              )}
+            </div>
           )
         }
 

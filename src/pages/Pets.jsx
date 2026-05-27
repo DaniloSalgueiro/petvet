@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
-import { Search, Plus, ChevronRight, X, Edit2, AlertCircle, Loader2, Sparkles, Trash2 } from 'lucide-react'
+import { Search, Plus, ChevronRight, X, Edit2, AlertCircle, Loader2, Sparkles, Trash2, Download } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import { PETS, TUTORES, AGENDAMENTOS, PRONTUARIOS, getTutorById } from '../data/mock'
 import { findVetById } from '../utils/getVeterinarios'
@@ -8,12 +8,22 @@ import { useAuth } from '../context/AuthContext'
 import { normIncludes, norm } from '../utils/normalizeText'
 import { useAISearch } from '../hooks/useAISearch'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { maskCPF, maskRG, maskPhone } from '../utils/masks'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import { RACAS_INICIAIS } from '../data/racas'
 
 const SPECIES_ICON = { 'Cão': '🐕', 'Gato': '🐈', 'Peixe': '🐠', 'Pássaro': '🦜', 'Coelho': '🐇' }
+
+function exportCSV(filename, headers, rows) {
+  const bom = '﻿'
+  const lines = [headers.join(';'), ...rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';'))]
+  const blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = filename + '.csv'; a.click()
+  URL.revokeObjectURL(url)
+}
 const SEX_LABEL = { M: 'Macho', F: 'Fêmea' }
 const VAC_COLOR = { 'Em dia': 'success', 'Atrasada': 'danger', 'N/A': 'neutral' }
 
@@ -178,12 +188,20 @@ export default function PetsPage({ navigateTo, navParams }) {
 
         {pageTab === 'tutores' && (
           <>
-            <div style={{ display: 'flex', gap: 8, maxWidth: 420 }}>
-              <div style={{ position: 'relative', flex: 1 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 240 }}>
                 <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                 <input className="form-input" style={{ paddingLeft: 38 }} placeholder="Buscar por nome, CPF ou e-mail..."
                   value={tutorSearch} onChange={e => setTutorSearch(e.target.value)} />
               </div>
+              <button className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}
+                onClick={() => {
+                  const headers = ['Nome', 'CPF', 'RG', 'Telefone', 'E-mail', 'Endereço', 'Pets']
+                  const rows = tutoresFiltrados.map(t => [t.name, t.cpf ?? '', t.rg ?? '', t.phone ?? '', t.email ?? '', t.address ?? '', pets.filter(p => p.tutorId === t.id).map(p => p.name).join(', ')])
+                  exportCSV('tutores', headers, rows)
+                }}>
+                <Download size={14} /> Exportar CSV
+              </button>
             </div>
             {tutoresFiltrados.length === 0 ? (
               <div className="card" style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
@@ -237,6 +255,18 @@ export default function PetsPage({ navigateTo, navParams }) {
               <button style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={clearAll}><X size={14} /></button>
             )}
           </div>
+          <button className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}
+            onClick={() => {
+              const fmtD = d => { try { return d ? new Date(d + 'T12:00').toLocaleDateString('pt-BR') : '—' } catch { return d ?? '—' } }
+              const headers = ['Nome', 'Espécie', 'Raça', 'Sexo', 'Tutor', 'Nascimento', 'Vacinação', 'Vermifugação', 'Castrado']
+              const rows = filteredPets.map(p => {
+                const t = tutores.find(tt => tt.id === p.tutorId)
+                return [p.name, p.species, p.breed ?? '', p.sex === 'M' ? 'Macho' : 'Fêmea', t?.name ?? '—', fmtD(p.birthDate), p.vacinacao ?? '', p.vermifugacao ?? '', p.castrado ?? '']
+              })
+              exportCSV('pets', headers, rows)
+            }}>
+            <Download size={14} /> Exportar CSV
+          </button>
         </div>
 
         {activeLabel && (
@@ -442,15 +472,15 @@ export default function PetsPage({ navigateTo, navParams }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
             <div className="form-group">
               <label className="form-label">CPF</label>
-              <input className="form-input" value={tutorForm.cpf} onChange={e => setTutorForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" />
+              <input className="form-input" value={tutorForm.cpf} onChange={e => setTutorForm(f => ({ ...f, cpf: maskCPF(e.target.value) }))} placeholder="000.000.000-00" />
             </div>
             <div className="form-group">
               <label className="form-label">RG</label>
-              <input className="form-input" value={tutorForm.rg ?? ''} onChange={e => setTutorForm(f => ({ ...f, rg: e.target.value }))} placeholder="00.000.000-0" />
+              <input className="form-input" value={tutorForm.rg ?? ''} onChange={e => setTutorForm(f => ({ ...f, rg: maskRG(e.target.value) }))} placeholder="00.000.000-0" />
             </div>
             <div className="form-group">
               <label className="form-label">Telefone</label>
-              <input className="form-input" value={tutorForm.phone} onChange={e => setTutorForm(f => ({ ...f, phone: e.target.value }))} placeholder="(11) 99999-9999" />
+              <input className="form-input" value={tutorForm.phone} onChange={e => setTutorForm(f => ({ ...f, phone: maskPhone(e.target.value) }))} placeholder="(11) 99999-9999" />
             </div>
           </div>
           <div className="form-group">

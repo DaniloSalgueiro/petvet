@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useIdentidade } from '../context/IdentidadeContext'
+import SSLogo from '../components/SSLogo'
+
+function loadSsNome() {
+  try { const c = JSON.parse(localStorage.getItem('petvet-ss-config') ?? '{}'); return c.nome || 'Salgueiro Systems' }
+  catch { return 'Salgueiro Systems' }
+}
 
 export default function Login() {
   const { login } = useAuth()
@@ -9,6 +15,13 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
+  const [ssNome, setSsNome] = useState(loadSsNome)
+
+  useEffect(() => {
+    function handler() { setSsNome(loadSsNome()) }
+    window.addEventListener('petvet-ss-updated', handler)
+    return () => window.removeEventListener('petvet-ss-updated', handler)
+  }, [])
 
   useEffect(() => {
     try {
@@ -122,6 +135,13 @@ export default function Login() {
         <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
           Acesso inicial: use seu e-mail e senha <strong>123456</strong>
         </p>
+
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <SSLogo size={32} />
+          <p className="ss-brand-text">
+            Desenvolvido por <span className="ss-brand-link">{ssNome}</span>
+          </p>
+        </div>
       </div>
     </div>
   )

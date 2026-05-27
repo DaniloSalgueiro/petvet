@@ -33,14 +33,25 @@ export default function ServicosPage() {
   const [activeTab, setActiveTab] = useState('fila')
   const [agendamentos, setAgendamentos] = usePersistentState('petvet-svc-agendamentos', AGENDAMENTOS)
   const [catalogo, setCatalogo] = usePersistentState('petvet-catalogo', SERVICOS_CATALOGO)
+  const [domicilio, setDomicilio] = usePersistentState('petvet-servicos-domicilio', [])
   const [hospedagens, setHospedagens] = usePersistentState('petvet-hospedagens', HOSPEDAGENS)
   const [searchCat, setSearchCat] = useState('')
+  const [searchDom, setSearchDom] = useState('')
   const [showSvcModal, setShowSvcModal] = useState(false)
+  const [showDomModal, setShowDomModal] = useState(false)
   const [showHospModal, setShowHospModal] = useState(false)
   const [editingSvc, setEditingSvc] = useState(null)
+  const [editingDom, setEditingDom] = useState(null)
   const [editingHosp, setEditingHosp] = useState(null)
   const [svcForm, setSvcForm] = useState(EMPTY_SVC)
+  const [domForm, setDomForm] = useState(EMPTY_SVC)
   const [hospForm, setHospForm] = useState(EMPTY_HOSP)
+  const [showDomPrompt, setShowDomPrompt] = useState(false)
+  const [lastSavedSvc, setLastSavedSvc] = useState(null)
+  const [deleteDomTarget, setDeleteDomTarget] = useState(null)
+  const [hospPetSearch, setHospPetSearch] = useState('')
+  const [petsLS] = usePersistentState('petvet-pets', PETS)
+  const [tutoresLS] = usePersistentState('petvet-tutores', TUTORES)
 
   // Appointment action modal
   const [selectedApt, setSelectedApt] = useState(null)
@@ -58,19 +69,39 @@ export default function ServicosPage() {
     .filter(s => !searchCat || normIncludes(s.name, searchCat) || normIncludes(s.category, searchCat))
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 
+  const filteredDom = domicilio
+    .filter(s => !searchDom || normIncludes(s.name, searchDom) || normIncludes(s.category, searchDom))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+
   function openEditSvc(svc) { setEditingSvc(svc); setSvcForm({ ...svc }); setShowSvcModal(true) }
   function openAddSvc() { setEditingSvc(null); setSvcForm(EMPTY_SVC); setShowSvcModal(true) }
   function saveSvc() {
     const sort = arr => [...arr].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
-    if (editingSvc) setCatalogo(prev => sort(prev.map(s => s.id === editingSvc.id ? { ...svcForm, id: editingSvc.id } : s)))
-    else setCatalogo(prev => sort([...prev, { ...svcForm, id: `s${Date.now()}` }]))
+    if (editingSvc) {
+      setCatalogo(prev => sort(prev.map(s => s.id === editingSvc.id ? { ...svcForm, id: editingSvc.id } : s)))
+    } else {
+      const newSvc = { ...svcForm, id: `s${Date.now()}` }
+      setCatalogo(prev => sort([...prev, newSvc]))
+      setLastSavedSvc(newSvc)
+      setShowDomPrompt(true)
+    }
     setShowSvcModal(false)
+  }
+
+  function openEditDom(svc) { setEditingDom(svc); setDomForm({ ...svc }); setShowDomModal(true) }
+  function openAddDom() { setEditingDom(null); setDomForm(EMPTY_SVC); setShowDomModal(true) }
+  function saveDom() {
+    const sort = arr => [...arr].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+    if (editingDom) setDomicilio(prev => sort(prev.map(s => s.id === editingDom.id ? { ...domForm, id: editingDom.id } : s)))
+    else setDomicilio(prev => sort([...prev, { ...domForm, id: `d${Date.now()}` }]))
+    setShowDomModal(false)
   }
 
   function openAddHosp() { setEditingHosp(null); setHospForm(EMPTY_HOSP); setShowHospModal(true) }
   function openEditHosp(h) { setEditingHosp(h); setHospForm({ ...h }); setShowHospModal(true) }
   function saveHosp() {
-    const data = { ...hospForm, tutorId: PETS.find(p => p.id === hospForm.petId)?.tutorId ?? '', status: 'ativo' }
+    const allPets = Array.isArray(petsLS) ? petsLS : PETS
+    const data = { ...hospForm, tutorId: allPets.find(p => p.id === hospForm.petId)?.tutorId ?? '', status: 'ativo' }
     if (editingHosp) setHospedagens(prev => prev.map(h => h.id === editingHosp.id ? { ...data, id: editingHosp.id } : h))
     else setHospedagens(prev => [...prev, { ...data, id: `h${Date.now()}` }])
     setShowHospModal(false)
@@ -107,7 +138,8 @@ export default function ServicosPage() {
 
   const tabs = [
     { id: 'fila',      label: 'Fila do Dia',  count: hoje.length },
-    { id: 'catalogo',  label: 'Catálogo',     count: catalogo.length },
+    { id: 'catalogo',  label: '🏥 Consultório', count: catalogo.length },
+    { id: 'domicilio', label: '🏠 Domicílio', count: domicilio.length },
     { id: 'hospedagem',label: 'Hospedagem',   count: hospAtivas.length },
   ]
 
@@ -116,10 +148,13 @@ export default function ServicosPage() {
       <div className="page-header">
         <div>
           <h2 className="page-title">Serviços</h2>
-          <p className="page-subtitle">Fila do dia, catálogo e hospedagem</p>
+          <p className="page-subtitle">Fila do dia, consultório e hospedagem</p>
         </div>
         {activeTab === 'catalogo' && hasRole('admin') && (
           <button className="btn btn-primary" onClick={openAddSvc}><Plus size={16} /> Novo Serviço</button>
+        )}
+        {activeTab === 'domicilio' && hasRole('admin') && (
+          <button className="btn btn-primary" onClick={openAddDom}><Plus size={16} /> Novo Serviço Domiciliar</button>
         )}
         {activeTab === 'hospedagem' && hasRole('admin', 'atendente') && (
           <button className="btn btn-primary" onClick={openAddHosp}><Plus size={16} /> Nova Hospedagem</button>
@@ -183,7 +218,7 @@ export default function ServicosPage() {
         </div>
       )}
 
-      {/* CATÁLOGO */}
+      {/* CONSULTÓRIO */}
       {activeTab === 'catalogo' && (
         <>
           <div style={{ position: 'relative', maxWidth: 400 }}>
@@ -219,6 +254,53 @@ export default function ServicosPage() {
               )
             })}
           </div>
+        </>
+      )}
+
+      {/* DOMICÍLIO */}
+      {activeTab === 'domicilio' && (
+        <>
+          <div style={{ position: 'relative', maxWidth: 400 }}>
+            <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input className="form-input" style={{ paddingLeft: 34 }} placeholder="Buscar serviço domiciliar..." value={searchDom} onChange={e => setSearchDom(e.target.value)} />
+          </div>
+          {filteredDom.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
+              <p style={{ fontSize: '2rem' }}>🏠</p>
+              <p style={{ fontWeight: 600, marginTop: 8 }}>Nenhum serviço domiciliar cadastrado</p>
+              <p style={{ fontSize: '0.8125rem', marginTop: 4 }}>Adicione serviços com preços independentes para atendimentos em domicílio.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+              {filteredDom.map(svc => {
+                const cfg = CAT_COLORS[svc.category] ?? { bg: 'var(--surface-2)', color: 'var(--text-muted)' }
+                return (
+                  <div key={svc.id} className="card" style={{ padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                      <div>
+                        <p style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: 4 }}>{svc.name}</p>
+                        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: '0.72rem', fontWeight: 600, background: cfg.bg, color: cfg.color }}>{svc.category}</span>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <p style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--teal)' }}>
+                          {svc.price > 0 ? `R$ ${svc.price.toFixed(2)}` : 'Interno'}
+                        </p>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{svc.duration >= 60 ? `${Math.floor(svc.duration / 60)}h${svc.duration % 60 > 0 ? svc.duration % 60 + 'min' : ''}` : `${svc.duration}min`}</p>
+                      </div>
+                    </div>
+                    {hasRole('admin') && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => openEditDom(svc)}>Editar</button>
+                        <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setDeleteDomTarget(svc)} title="Excluir">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </>
       )}
 
@@ -398,11 +480,38 @@ export default function ServicosPage() {
         message={`Excluir serviço "${deleteSvcTarget?.name}"? O item será excluído permanentemente. Confirmar?`}
       />
       <ConfirmModal
+        isOpen={!!deleteDomTarget}
+        onClose={() => setDeleteDomTarget(null)}
+        onConfirm={() => setDomicilio(prev => prev.filter(s => s.id !== deleteDomTarget.id))}
+        message={`Excluir serviço domiciliar "${deleteDomTarget?.name}"? O item será excluído permanentemente. Confirmar?`}
+      />
+      <ConfirmModal
         isOpen={!!deleteHospTarget}
         onClose={() => setDeleteHospTarget(null)}
         onConfirm={() => setHospedagens(prev => prev.filter(h => h.id !== deleteHospTarget.id))}
         message="O item será excluído permanentemente. Confirmar?"
       />
+
+      {/* Prompt: adicionar versão domiciliar */}
+      {showDomPrompt && lastSavedSvc && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" style={{ maxWidth: 420, width: '100%', padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Adicionar versão domiciliar?</p>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+              Deseja cadastrar também <strong>{lastSavedSvc.name}</strong> com preço diferente para atendimentos domiciliares?
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowDomPrompt(false)}>Não, obrigado</button>
+              <button className="btn btn-primary btn-sm" onClick={() => {
+                setShowDomPrompt(false)
+                setEditingDom(null)
+                setDomForm({ ...lastSavedSvc, id: undefined, price: '' })
+                setShowDomModal(true)
+              }}>Sim, cadastrar versão domiciliar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modais */}
       <Modal isOpen={showSvcModal} onClose={() => setShowSvcModal(false)} title={editingSvc ? 'Editar Serviço' : 'Novo Serviço'} size="sm"
@@ -421,14 +530,60 @@ export default function ServicosPage() {
         </div>
       </Modal>
 
+      <Modal isOpen={showDomModal} onClose={() => setShowDomModal(false)} title={editingDom ? 'Editar Serviço Domiciliar' : 'Novo Serviço Domiciliar'} size="sm"
+        footer={<><button className="btn btn-ghost" onClick={() => setShowDomModal(false)}>Cancelar</button><button className="btn btn-primary" onClick={saveDom}>Salvar</button></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="form-group"><label className="form-label">Nome</label><input className="form-input" value={domForm.name} onChange={e => setDomForm(f => ({ ...f, name: e.target.value }))} /></div>
+          <div className="form-group"><label className="form-label">Categoria</label>
+            <select className="form-select" value={domForm.category} onChange={e => setDomForm(f => ({ ...f, category: e.target.value }))}>
+              {Object.keys(CAT_COLORS).map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="form-group"><label className="form-label">Duração (min)</label><input type="number" className="form-input" value={domForm.duration} onChange={e => setDomForm(f => ({ ...f, duration: Number(e.target.value) }))} /></div>
+            <div className="form-group"><label className="form-label">Preço domiciliar (R$)</label><input type="number" step="0.01" className="form-input" value={domForm.price} onChange={e => setDomForm(f => ({ ...f, price: Number(e.target.value) }))} /></div>
+          </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={showHospModal} onClose={() => setShowHospModal(false)} title="Nova Hospedagem" size="md"
         footer={<><button className="btn btn-ghost" onClick={() => setShowHospModal(false)}>Cancelar</button><button className="btn btn-primary" onClick={saveHosp}>Salvar</button></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group"><label className="form-label">Pet</label>
-            <select className="form-select" value={hospForm.petId} onChange={e => setHospForm(f => ({ ...f, petId: e.target.value }))}>
-              <option value="">Selecione</option>
-              {PETS.map(p => <option key={p.id} value={p.id}>{p.name} ({getTutorById(p.tutorId)?.name})</option>)}
-            </select>
+            {(() => {
+              const allPetsH = Array.isArray(petsLS) ? petsLS : PETS
+              const allTutoresH = Array.isArray(tutoresLS) ? tutoresLS : TUTORES
+              const sortedPetsH = [...allPetsH].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'pt-BR'))
+              const filteredPetsH = hospPetSearch.trim()
+                ? sortedPetsH.filter(p => {
+                    const t = allTutoresH.find(tt => tt.id === p.tutorId)
+                    return normIncludes(p.name ?? '', hospPetSearch) || normIncludes(t?.name ?? '', hospPetSearch)
+                  })
+                : sortedPetsH
+              const selPet = allPetsH.find(p => p.id === hospForm.petId)
+              const selTutor = selPet ? allTutoresH.find(t => t.id === selPet.tutorId) : null
+              return (
+                <>
+                  <input className="form-input" placeholder="Digite o nome do pet ou tutor..."
+                    value={hospPetSearch} onChange={e => setHospPetSearch(e.target.value)}
+                    style={{ marginBottom: 4 }} />
+                  <select className="form-select" value={hospForm.petId}
+                    onChange={e => {
+                      const pet = sortedPetsH.find(p => p.id === e.target.value)
+                      setHospForm(f => ({ ...f, petId: e.target.value }))
+                      if (pet) setHospPetSearch(pet.name)
+                    }}>
+                    <option value="">Selecione</option>
+                    {filteredPetsH.map(p => {
+                      const t = allTutoresH.find(tt => tt.id === p.tutorId)
+                      return <option key={p.id} value={p.id}>{p.name}{t ? ` (${t.name})` : ''}</option>
+                    })}
+                  </select>
+                  {hospPetSearch.trim() && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{filteredPetsH.length} pet{filteredPetsH.length !== 1 ? 's' : ''} encontrado{filteredPetsH.length !== 1 ? 's' : ''}</span>}
+                  {selTutor && <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>Tutor: <strong>{selTutor.name}</strong>{selTutor.phone ? ` · ${selTutor.phone}` : ''}</p>}
+                </>
+              )
+            })()}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div className="form-group"><label className="form-label">Check-in</label><input type="date" className="form-input" value={hospForm.checkIn} onChange={e => setHospForm(f => ({ ...f, checkIn: e.target.value }))} /></div>

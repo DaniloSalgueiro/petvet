@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, AlertTriangle, X, Package, Trash2 } from 'lucide-react'
+import { Plus, Search, AlertTriangle, X, Package, Trash2, Download } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import CropModal from '../components/ui/CropModal'
@@ -10,6 +10,15 @@ import { normIncludes, norm } from '../utils/normalizeText'
 import { usePersistentState } from '../hooks/usePersistentState'
 
 const CATEGORIES = ['Todos', 'Medicamento', 'Vacina', 'Dermatologia', 'Nutrição', 'Anestésico', 'Material']
+
+function exportCSV(filename, headers, rows) {
+  const bom = '﻿'
+  const lines = [headers.join(';'), ...rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';'))]
+  const blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = filename + '.csv'; a.click()
+  URL.revokeObjectURL(url)
+}
 
 const EMPTY_PROD = {
   name: '', category: 'Medicamento', quantity: '', unit: 'comp',
@@ -107,11 +116,22 @@ export default function EstoquePage() {
           <h2 className="page-title">Estoque</h2>
           <p className="page-subtitle">{produtos.length} produtos cadastrados</p>
         </div>
-        {hasRole('admin', 'atendente') && (
-          <button className="btn btn-primary" onClick={openAdd}>
-            <Plus size={16} /> Novo Produto
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => {
+              const fmtD = d => { try { return d ? new Date(d + 'T12:00').toLocaleDateString('pt-BR') : '—' } catch { return d ?? '—' } }
+              const headers = ['Nome', 'Categoria', 'Qtd', 'Unidade', 'Mínimo', 'Validade', 'Fornecedor', 'Custo (R$)', 'Venda (R$)', 'Local']
+              const rows = filtered.map(p => [p.name, p.category, p.quantity, p.unit, p.minStock, fmtD(p.expiryDate), p.supplier ?? '', Number(p.costPrice || 0).toFixed(2).replace('.', ','), Number(p.salePrice || 0).toFixed(2).replace('.', ','), p.location ?? ''])
+              exportCSV('estoque', headers, rows)
+            }}>
+            <Download size={14} /> Exportar CSV
           </button>
-        )}
+          {hasRole('admin', 'atendente') && (
+            <button className="btn btn-primary" onClick={openAdd}>
+              <Plus size={16} /> Novo Produto
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}

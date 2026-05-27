@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users, FileText, Calendar,
   Package, Scissors, DollarSign, UserCog, LogOut, ShoppingCart, Syringe,
@@ -5,6 +6,25 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useIdentidade } from '../context/IdentidadeContext'
+import SSLogo from './SSLogo'
+
+const PLANOS_MODULOS = {
+  basico: ['dashboard','pets','prontuario','agenda','configuracoes'],
+  plus:   ['dashboard','pets','prontuario','agenda','vacinaprotocolo','bulario','estoque','servicos','configuracoes'],
+  pro:    null,
+}
+
+function loadSsCfgSidebar() {
+  try { return JSON.parse(localStorage.getItem('petvet-ss-config') ?? '{}') }
+  catch { return {} }
+}
+function loadSsNome() {
+  const c = loadSsCfgSidebar()
+  return c.poweredBy || c.nome || 'Salgueiro Systems'
+}
+function loadSsPlano() {
+  return loadSsCfgSidebar().plano ?? 'pro'
+}
 
 const NAV_ITEMS = [
   { id: 'dashboard',        label: 'Dashboard',       icon: LayoutDashboard },
@@ -31,6 +51,16 @@ const ADMIN_ITEMS = [
 export default function Sidebar({ currentPage, onNavigate }) {
   const { user, logout, hasRole, hasPermission } = useAuth()
   const { identidade } = useIdentidade()
+  const [ssNome, setSsNome] = useState(loadSsNome)
+  const [ssPlano, setSsPlano] = useState(loadSsPlano)
+  useEffect(() => {
+    function handler() { setSsNome(loadSsNome()); setSsPlano(loadSsPlano()) }
+    window.addEventListener('petvet-ss-updated', handler)
+    return () => window.removeEventListener('petvet-ss-updated', handler)
+  }, [])
+
+  const modulosAtivos = PLANOS_MODULOS[ssPlano] ?? null
+  const filteredNavItems = modulosAtivos ? NAV_ITEMS.filter(i => modulosAtivos.includes(i.id)) : NAV_ITEMS
 
   return (
     <aside className="sidebar">
@@ -62,7 +92,7 @@ export default function Sidebar({ currentPage, onNavigate }) {
 
       <nav className="sidebar-nav">
         <span className="sidebar-section-label">Principal</span>
-        {NAV_ITEMS.map(item => (
+        {filteredNavItems.map(item => (
           <NavItem
             key={item.id}
             item={item}
@@ -73,7 +103,8 @@ export default function Sidebar({ currentPage, onNavigate }) {
 
         {(() => {
           const visibleAdminItems = ADMIN_ITEMS.filter(item =>
-            hasRole('admin') || hasPermission(item.id, 'view')
+            (modulosAtivos === null || modulosAtivos.includes(item.id)) &&
+            (hasRole('admin') || hasPermission(item.id, 'view'))
           )
           if (visibleAdminItems.length === 0) return null
           return (
@@ -107,6 +138,19 @@ export default function Sidebar({ currentPage, onNavigate }) {
           >
             <LogOut size={16} />
           </button>
+        </div>
+        <div style={{
+          borderTop: '1px solid var(--sidebar-divider)',
+          padding: '8px 14px 10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <SSLogo size={24} />
+          <div>
+            <div style={{ fontSize: 9, color: 'var(--sidebar-text)', opacity: 0.55, lineHeight: 1.3, fontWeight: 400 }}>Powered by</div>
+            <div style={{ fontSize: 10, color: 'var(--sidebar-text)', opacity: 0.75, fontWeight: 700, letterSpacing: '0.04em' }}>{ssNome}</div>
+          </div>
         </div>
       </div>
     </aside>

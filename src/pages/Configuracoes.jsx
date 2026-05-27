@@ -1,13 +1,62 @@
 import { useState, useEffect, useRef } from 'react'
-import { RotateCcw, Save, MessageCircle, History, Settings2, Trash2 } from 'lucide-react'
+import { RotateCcw, Save, MessageCircle, History, Settings2, Trash2, Lock, Unlock } from 'lucide-react'
+import SSLogo from '../components/SSLogo'
 import { useIdentidade, DEFAULT_IDENTIDADE } from '../context/IdentidadeContext'
 import { DEFAULT_FOLLOWUP_CONFIG } from '../context/FollowupContext'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import ConfirmModal from '../components/ui/ConfirmModal'
 
-const FOLLOWUP_KEY  = 'petvet-followup-config'
+export const PLANOS_MODULOS = {
+  basico: ['dashboard','pets','prontuario','agenda','configuracoes'],
+  plus:   ['dashboard','pets','prontuario','agenda','vacinaprotocolo','bulario','estoque','servicos','configuracoes'],
+  pro:    null, // null = todos os módulos
+}
+
+export const PLANO_LABELS = {
+  basico: 'Básico',
+  plus:   'Plus',
+  pro:    'Pro',
+}
+
+const PLANO_MODULOS_DESCRICAO = {
+  basico: ['Dashboard','Pets & Tutores','Prontuário','Agenda'],
+  plus:   ['+ Protocolo de Vacinas','Bulário','Estoque','Serviços'],
+  pro:    ['+ PDV','Financeiro','Relatórios','Controle de Acesso','Funcionários','Config. Prontuário'],
+}
+
+const FOLLOWUP_KEY       = 'petvet-followup-config'
 const FOLLOWUP_QUEUE_KEY = 'petvet-followup-queue'
+const SS_CONFIG_KEY      = 'petvet-ss-config'
+const DEV_CONFIG_KEY     = 'petvet-dev-config'
+const DEV_UNLOCKED_KEY   = 'petvet-dev-unlocked-at'
+const DEV_TIMEOUT_MS     = 30 * 60 * 1000
+const DEFAULT_DEV_HASH   = btoa('SS@2026dev')
+
+function loadSsConfig() {
+  const defaults = {
+    nome: 'Salgueiro Systems', versao: 'v1.0.0',
+    descricao: 'Sistema completo de gestão para petshops e clínicas veterinárias. Desenvolvido por Salgueiro Systems para oferecer controle total de prontuários, agendamentos, estoque, PDV e financeiro.',
+    poweredBy: 'Salgueiro Systems', logo: null,
+    site: '', whatsapp: '', email: '',
+  }
+  try { return { ...defaults, ...JSON.parse(localStorage.getItem(SS_CONFIG_KEY) ?? '{}') } }
+  catch { return { ...defaults } }
+}
+function getDevHash() {
+  try { return JSON.parse(localStorage.getItem(DEV_CONFIG_KEY) ?? 'null')?.senhaHash ?? DEFAULT_DEV_HASH }
+  catch { return DEFAULT_DEV_HASH }
+}
+function checkDevPwd(pwd) { return btoa(pwd) === getDevHash() }
+function isDevUnlocked() {
+  const ts = sessionStorage.getItem(DEV_UNLOCKED_KEY)
+  return !!ts && Date.now() - Number(ts) < DEV_TIMEOUT_MS
+}
+function devMinLeft() {
+  const ts = sessionStorage.getItem(DEV_UNLOCKED_KEY)
+  if (!ts) return 0
+  return Math.max(0, Math.ceil((DEV_TIMEOUT_MS - (Date.now() - Number(ts))) / 60000))
+}
 const TEMPO_OPTIONS = [
   { value: 30,   label: '30 minutos' },
   { value: 60,   label: '1 hora' },
@@ -27,18 +76,6 @@ function fmtDT(iso) {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-const TABELA_FIELDS = [
-  { key: 'Consulta Clínica Geral',   label: 'Consulta Clínica Geral' },
-  { key: 'Consulta Dermatológica',   label: 'Consulta Dermatológica' },
-  { key: 'Consulta Canábica',        label: 'Consulta Canábica' },
-  { key: 'Retorno',                  label: 'Retorno' },
-  { key: 'Vacina (por dose)',        label: 'Vacina (por dose)' },
-  { key: 'Aplicação',               label: 'Aplicação (por procedimento)' },
-]
-
-function loadTabela() {
-  try { return JSON.parse(localStorage.getItem('petvet-tabela-precos') ?? '{}') } catch { return {} }
-}
 
 export default function ConfiguracoesPage() {
   const { identidade, setIdentidade, resetIdentidade } = useIdentidade()
@@ -47,8 +84,6 @@ export default function ConfiguracoesPage() {
   const [cropField, setCropField] = useState(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
-  const [tabela, setTabela] = useState(loadTabela)
-  const [tabelaSaved, setTabelaSaved] = useState(false)
   const [followupCfg, setFollowupCfg] = useState(loadFollowupConfig)
   const [followupSaved, setFollowupSaved] = useState(false)
   const [followupTab, setFollowupTab] = useState('config')
@@ -56,6 +91,18 @@ export default function ConfiguracoesPage() {
   const [queue, setQueue] = useState(loadFollowupQueue)
   const [newLinkGoogle, setNewLinkGoogle] = useState('')
   const [newLinkInsta, setNewLinkInsta] = useState('')
+  const [ssCfg, setSsCfg] = useState(loadSsConfig)
+  const [ssSaved, setSsSaved] = useState(false)
+  const [devUnlocked, setDevUnlocked] = useState(isDevUnlocked)
+  const [devMinutes, setDevMinutes] = useState(devMinLeft)
+  const [showDevModal, setShowDevModal] = useState(false)
+  const [devPwd, setDevPwd] = useState('')
+  const [devPwdError, setDevPwdError] = useState('')
+  const [devToast, setDevToast] = useState(false)
+  const [changePwd, setChangePwd] = useState({ atual: '', nova: '', confirma: '' })
+  const [changePwdMsg, setChangePwdMsg] = useState('')
+  const [ssCropSrc, setSsCropSrc] = useState(null)
+  const ssLogoInputRef = useRef(null)
 
   // Ref para guardar a identidade salva mais recente (usada no cleanup)
   const savedRef = useRef(identidade)
@@ -80,6 +127,22 @@ export default function ConfiguracoesPage() {
     }
   }, [])
 
+  // Timer: verifica expiração do acesso dev a cada 60s
+  useEffect(() => {
+    if (!devUnlocked) return
+    const id = setInterval(() => {
+      if (!isDevUnlocked()) {
+        sessionStorage.removeItem(DEV_UNLOCKED_KEY)
+        setDevUnlocked(false)
+        setDevToast(true)
+        setTimeout(() => setDevToast(false), 4500)
+      } else {
+        setDevMinutes(devMinLeft())
+      }
+    }, 60000)
+    return () => clearInterval(id)
+  }, [devUnlocked])
+
   function handleSave() {
     setIdentidade({ ...draft })
     setSavedMsg(true)
@@ -90,12 +153,6 @@ export default function ConfiguracoesPage() {
     resetIdentidade()
     setDraft({ ...DEFAULT_IDENTIDADE })
     setShowResetConfirm(false)
-  }
-
-  function handleSaveTabela() {
-    localStorage.setItem('petvet-tabela-precos', JSON.stringify(tabela))
-    setTabelaSaved(true)
-    setTimeout(() => setTabelaSaved(false), 2500)
   }
 
   function handleSaveFollowup() {
@@ -159,6 +216,50 @@ export default function ConfiguracoesPage() {
     const digits = (item.tutorTelefone || '').replace(/\D/g, '')
     const phone = digits.startsWith('55') && digits.length >= 12 ? digits : '55' + digits
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank')
+  }
+
+  function handleSaveSsCfg() {
+    localStorage.setItem(SS_CONFIG_KEY, JSON.stringify(ssCfg))
+    window.dispatchEvent(new Event('petvet-ss-updated'))
+    setSsSaved(true)
+    setTimeout(() => setSsSaved(false), 2500)
+  }
+
+  function handleDevAuth() {
+    if (checkDevPwd(devPwd)) {
+      sessionStorage.setItem(DEV_UNLOCKED_KEY, String(Date.now()))
+      setDevUnlocked(true)
+      setDevMinutes(30)
+      setShowDevModal(false)
+      setDevPwd('')
+      setDevPwdError('')
+    } else {
+      setDevPwdError('Senha incorreta')
+      setDevPwd('')
+    }
+  }
+
+  function handleDevLock() {
+    sessionStorage.removeItem(DEV_UNLOCKED_KEY)
+    setDevUnlocked(false)
+    setDevMinutes(0)
+  }
+
+  function handleChangeDevPwd() {
+    if (!checkDevPwd(changePwd.atual)) { setChangePwdMsg('Senha atual incorreta'); return }
+    if (changePwd.nova.length < 6) { setChangePwdMsg('Nova senha deve ter pelo menos 6 caracteres'); return }
+    if (changePwd.nova !== changePwd.confirma) { setChangePwdMsg('Nova senha e confirmação não coincidem'); return }
+    try { const prev = JSON.parse(localStorage.getItem(DEV_CONFIG_KEY) ?? '{}'); localStorage.setItem(DEV_CONFIG_KEY, JSON.stringify({ ...prev, senhaHash: btoa(changePwd.nova) })) } catch { localStorage.setItem(DEV_CONFIG_KEY, JSON.stringify({ senhaHash: btoa(changePwd.nova) })) }
+    setChangePwd({ atual: '', nova: '', confirma: '' })
+    setChangePwdMsg('✓ Senha alterada com sucesso')
+    setTimeout(() => setChangePwdMsg(''), 3500)
+  }
+
+  function handleSsLogoFile(file) {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = e => setSsCropSrc(e.target.result)
+    reader.readAsDataURL(file)
   }
 
   function handleLogoFile(field, file) {
@@ -339,39 +440,6 @@ export default function ConfiguracoesPage() {
         <div style={{ marginTop: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
           <div style={{ flex: 1, height: 10, borderRadius: 5, background: `linear-gradient(90deg, ${draft.corPrimaria}, ${draft.corDestaque})` }} />
           <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Gradiente aplicado</span>
-        </div>
-      </div>
-
-      {/* Tabela de Preços */}
-      <div className="card" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-          <div>
-            <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: 2 }}>Tabela de Preços</p>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Usada para sugerir valores automaticamente no PDV ao selecionar tutor</p>
-          </div>
-          <button className="btn btn-primary btn-sm" onClick={handleSaveTabela}>
-            <Save size={14} /> {tabelaSaved ? 'Salvo!' : 'Salvar tabela'}
-          </button>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px 20px' }}>
-          {TABELA_FIELDS.map(({ key, label }) => (
-            <div key={key} className="form-group">
-              <label className="form-label">{label}</label>
-              <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.875rem', pointerEvents: 'none' }}>R$</span>
-                <input
-                  className="form-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  style={{ paddingLeft: 30 }}
-                  value={tabela[key] ?? ''}
-                  placeholder="0,00"
-                  onChange={e => setTabela(t => ({ ...t, [key]: e.target.value }))}
-                />
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 
@@ -576,6 +644,176 @@ export default function ConfiguracoesPage() {
         )}
       </div>
 
+      {/* Toast expiração dev */}
+      {devToast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1300, background: '#1a1a1a', color: '#fff', padding: '12px 20px', borderRadius: 10, fontSize: '0.875rem', boxShadow: '0 4px 16px rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Lock size={16} /> Sessão do desenvolvedor expirada — edição bloqueada
+        </div>
+      )}
+
+      {/* Sobre o Sistema */}
+      <div className="card" style={{ padding: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
+          <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', margin: 0 }}>Sobre o Sistema</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {devUnlocked ? (
+              <>
+                <span style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: 20, background: '#e8f5e9', color: '#2e7d32', fontWeight: 600, border: '1px solid #a5d6a7' }}>
+                  ✓ Autenticado — {devMinutes} min restantes
+                </span>
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={handleDevLock}>
+                  <Lock size={13} /> Bloquear agora
+                </button>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Lock size={12} /> Protegido pelo desenvolvedor
+                </span>
+                <button className="btn btn-outline btn-sm" onClick={() => setShowDevModal(true)}>
+                  <Lock size={13} /> Editar (acesso restrito)
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {!devUnlocked ? (
+          /* ESTADO BLOQUEADO — somente leitura */
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, minWidth: 100 }}>
+              <SSLogo size={56} />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "'Playfair Display', serif" }}>{ssCfg.nome}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>{ssCfg.versao}</div>
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 10px' }}>{ssCfg.descricao}</p>
+              {ssCfg.site && <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>🌐 {ssCfg.site}</div>}
+              {ssCfg.whatsapp && <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>📱 {ssCfg.whatsapp}</div>}
+              {ssCfg.email && <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>✉️ {ssCfg.email}</div>}
+              <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 12, background: 'var(--teal-light)', border: '1px solid var(--teal)', fontSize: '0.75rem', fontWeight: 700, color: 'var(--teal-dark)' }}>
+                Plano {PLANO_LABELS[ssCfg.plano ?? 'pro']}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ESTADO DESBLOQUEADO — formulário de edição */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Logo */}
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Logo</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <SSLogo size={56} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button className="btn btn-outline btn-sm" onClick={() => ssLogoInputRef.current?.click()}>
+                    📁 Carregar imagem
+                  </button>
+                  {ssCfg.logo && (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}
+                      onClick={() => { setSsCfg(c => ({ ...c, logo: null })); window.dispatchEvent(new Event('petvet-ss-updated')) }}>
+                      Remover logo
+                    </button>
+                  )}
+                  <input ref={ssLogoInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => handleSsLogoFile(e.target.files?.[0])} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0 16px' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Nome do sistema</label>
+                <input className="form-input" value={ssCfg.nome} onChange={e => setSsCfg(c => ({ ...c, nome: e.target.value }))} placeholder="Salgueiro Systems" />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Versão</label>
+                <input className="form-input" style={{ width: 100 }} value={ssCfg.versao} onChange={e => setSsCfg(c => ({ ...c, versao: e.target.value }))} placeholder="v1.0.0" />
+              </div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Descrição</label>
+              <textarea className="form-input" rows={3} style={{ resize: 'vertical' }} value={ssCfg.descricao} onChange={e => setSsCfg(c => ({ ...c, descricao: e.target.value }))} />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Texto "Powered by" (sidebar)</label>
+              <input className="form-input" value={ssCfg.poweredBy} onChange={e => setSsCfg(c => ({ ...c, poweredBy: e.target.value }))} placeholder="Salgueiro Systems" />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Plano ativo</label>
+              <select className="form-select" value={ssCfg.plano ?? 'pro'} onChange={e => setSsCfg(c => ({ ...c, plano: e.target.value }))}>
+                <option value="basico">Básico — Dashboard, Pets, Prontuário, Agenda</option>
+                <option value="plus">Plus — + Vacinas, Bulário, Estoque, Serviços</option>
+                <option value="pro">Pro — Todos os módulos</option>
+              </select>
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {Object.entries(PLANO_MODULOS_DESCRICAO).map(([plano, items]) => {
+                  const ativo = (ssCfg.plano ?? 'pro') === plano
+                  return (
+                    <div key={plano} style={{ display: 'flex', alignItems: 'flex-start', gap: 6, opacity: ativo ? 1 : 0.45 }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: ativo ? 'var(--teal-light)' : 'var(--surface-2)', color: ativo ? 'var(--teal-dark)' : 'var(--text-muted)', flexShrink: 0, marginTop: 1 }}>
+                        {PLANO_LABELS[plano]}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{items.join(' · ')}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 12px' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Site</label>
+                <input className="form-input" value={ssCfg.site} onChange={e => setSsCfg(c => ({ ...c, site: e.target.value }))} placeholder="https://..." />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">WhatsApp</label>
+                <input className="form-input" value={ssCfg.whatsapp} onChange={e => setSsCfg(c => ({ ...c, whatsapp: e.target.value }))} placeholder="(11) 9..." />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">E-mail</label>
+                <input className="form-input" type="email" value={ssCfg.email} onChange={e => setSsCfg(c => ({ ...c, email: e.target.value }))} placeholder="suporte@..." />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary btn-sm" onClick={handleSaveSsCfg}>
+                <Save size={14} /> {ssSaved ? 'Salvo!' : 'Salvar alterações'}
+              </button>
+            </div>
+
+            {/* Alterar senha */}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 10 }}>Alterar senha do desenvolvedor</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 12px', marginBottom: 10 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Senha atual</label>
+                  <input className="form-input" type="password" value={changePwd.atual} onChange={e => setChangePwd(p => ({ ...p, atual: e.target.value }))} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Nova senha</label>
+                  <input className="form-input" type="password" value={changePwd.nova} onChange={e => setChangePwd(p => ({ ...p, nova: e.target.value }))} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Confirmar nova senha</label>
+                  <input className="form-input" type="password" value={changePwd.confirma} onChange={e => setChangePwd(p => ({ ...p, confirma: e.target.value }))} />
+                </div>
+              </div>
+              {changePwdMsg && (
+                <p style={{ fontSize: '0.8125rem', color: changePwdMsg.startsWith('✓') ? 'var(--success)' : 'var(--danger)', marginBottom: 8 }}>{changePwdMsg}</p>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-outline btn-sm" onClick={handleChangeDevPwd}>Alterar senha</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div style={{ padding: '12px 16px', background: 'var(--teal-light)', borderRadius: 8, borderLeft: '3px solid var(--teal)' }}>
         <p style={{ fontSize: '0.8125rem', color: 'var(--teal-dark)', margin: 0 }}>
           Clique em <strong>Salvar alterações</strong> para persistir as configurações.
@@ -604,6 +842,49 @@ export default function ConfiguracoesPage() {
             setCropField(null)
           }}
         />
+      )}
+
+      {ssCropSrc && (
+        <CropModal
+          src={ssCropSrc}
+          shape="rect"
+          onSave={dataUrl => {
+            setSsCfg(c => ({ ...c, logo: dataUrl }))
+            setSsCropSrc(null)
+          }}
+          onClose={() => setSsCropSrc(null)}
+        />
+      )}
+
+      {showDevModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div className="card" style={{ width: '100%', maxWidth: 400, padding: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: 6 }}>🔐</div>
+              <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', marginBottom: 4 }}>Acesso restrito — Salgueiro Systems</p>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>Esta seção é protegida. Digite a senha do desenvolvedor para continuar.</p>
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Senha do desenvolvedor</label>
+              <input
+                className="form-input"
+                type="password"
+                value={devPwd}
+                onChange={e => { setDevPwd(e.target.value); setDevPwdError('') }}
+                onKeyDown={e => e.key === 'Enter' && handleDevAuth()}
+                autoFocus
+                placeholder="••••••••"
+              />
+              {devPwdError && <p style={{ fontSize: '0.8125rem', color: 'var(--danger)', marginTop: 4, marginBottom: 0 }}>{devPwdError}</p>}
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setShowDevModal(false); setDevPwd(''); setDevPwdError('') }}>Cancelar</button>
+              <button className="btn btn-primary btn-sm" onClick={handleDevAuth}>
+                <Unlock size={14} /> Verificar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

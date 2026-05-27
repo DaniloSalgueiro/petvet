@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Users, DollarSign, CheckCircle, X, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { maskCPF, maskRG, maskPhone } from '../utils/masks'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { usePersistentState } from '../hooks/usePersistentState'
@@ -47,7 +48,8 @@ function calcSalario(f) {
 function fmt(v) { return `R$ ${(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` }
 
 const EMPTY_FUNC = {
-  nome: '', cargo: '', salarioBase: '', vr: '', va: '',
+  nome: '', cargo: '', cpf: '', rg: '', phone: '',
+  salarioBase: '', vr: '', va: '',
   planoSaude: 'Não', planoSaudeValor: '',
   premiacao: '', adiantamento: '', outrosDescontos: '', outrosBeneficios: '',
   ativo: true, apareceAgenda: false,
@@ -300,6 +302,18 @@ export default function FuncionariosPage() {
           <div className="form-group">
             <label className="form-label">Cargo</label>
             <input className="form-input" value={form.cargo} onChange={e => setForm(f => ({ ...f, cargo: e.target.value }))} placeholder="Ex: Veterinário, Atendente, Banhista" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">CPF</label>
+            <input className="form-input" value={form.cpf ?? ''} onChange={e => setForm(f => ({ ...f, cpf: maskCPF(e.target.value) }))} placeholder="000.000.000-00" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">RG</label>
+            <input className="form-input" value={form.rg ?? ''} onChange={e => setForm(f => ({ ...f, rg: maskRG(e.target.value) }))} placeholder="00.000.000-0" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Telefone</label>
+            <input className="form-input" value={form.phone ?? ''} onChange={e => setForm(f => ({ ...f, phone: maskPhone(e.target.value) }))} placeholder="(11) 99999-9999" />
           </div>
           <div className="form-group">
             <label className="form-label">Salário base (R$)</label>

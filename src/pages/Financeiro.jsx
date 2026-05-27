@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, TrendingUp, TrendingDown, DollarSign, Search, Settings, Trash2 } from 'lucide-react'
+import { Plus, TrendingUp, TrendingDown, DollarSign, Search, Settings, Trash2, Download } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
@@ -30,6 +30,15 @@ const DEFAULT_PAYMENT_RATES = { pix: 0, debito: 0, credito: 2.5, parcelado: 1.99
 const PAYMENT_LABELS = { pix: 'PIX', debito: 'Cartão de Débito', credito: 'Cartão de Crédito', parcelado: 'Parcelado', dinheiro: 'Dinheiro' }
 
 function fmt(v) { return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` }
+
+function exportCSV(filename, headers, rows) {
+  const bom = '﻿'
+  const lines = [headers.join(';'), ...rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';'))]
+  const blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = filename + '.csv'; a.click()
+  URL.revokeObjectURL(url)
+}
 
 export default function FinanceiroPage() {
   const { hasRole, hasPermission } = useAuth()
@@ -262,6 +271,19 @@ export default function FinanceiroPage() {
                 {t === 'todos' ? 'Todos' : t === 'receita' ? 'Receitas' : 'Despesas'}
               </button>
             ))}
+            <button className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 'auto' }}
+              onClick={() => {
+                const headers = ['Data', 'Tipo', 'Categoria', 'Descrição', 'Método', 'Status', 'Valor']
+                const rows = filteredLans.map(l => [
+                  new Date(l.date + 'T00:00').toLocaleDateString('pt-BR'),
+                  l.type === 'receita' ? 'Receita' : 'Despesa',
+                  l.category, l.description, l.method, l.status,
+                  Number(l.value).toFixed(2).replace('.', ','),
+                ])
+                exportCSV('lancamentos', headers, rows)
+              }}>
+              <Download size={14} /> Exportar CSV
+            </button>
           </div>
 
           <div className="table-wrapper">

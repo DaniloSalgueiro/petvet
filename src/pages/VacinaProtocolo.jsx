@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Syringe, Plus, Trash2, Check } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import Modal from '../components/ui/Modal'
-import { PETS } from '../data/mock'
+import { PETS, PRODUTOS, SERVICOS_CATALOGO } from '../data/mock'
 import { getVeterinarios } from '../utils/getVeterinarios'
 import { useAuth } from '../context/AuthContext'
 import { usePersistentState } from '../hooks/usePersistentState'
@@ -31,17 +31,26 @@ const INITIAL_APPLICATIONS = [
   { id: 'ap7', protocolId: 'vp6', petId: 'p2', date: '2025-04-12', dose: 1, lot: 'L008-25', vet: 'Dra. Tatiana Borges', notes: '' },
 ]
 
-const EMPTY_PROTO = { name: '', species: 'Cão', doses: 1, intervalDays: 21, annualBooster: true, minAgeMonths: 2 }
-const EMPTY_APP   = { protocolId: '', petId: '', date: TODAY, dose: 1, lot: '', vet: '', notes: '' }
+const EMPTY_PROTO = {
+  name: '', species: 'Cão', doses: 1, intervalDays: 21, annualBooster: true, minAgeMonths: 2,
+  vacinas: [], medicamentos: [], servicos: [], precoTotal: 0,
+}
+const EMPTY_APP      = { protocolId: '', petId: '', date: TODAY, dose: 1, lot: '', vet: '', notes: '' }
+const EMPTY_VAC_LINE = { produtoId: '', nome: '', qtd: 1, precoUnit: 0 }
+const EMPTY_MED_LINE = { produtoId: '', nome: '', qtd: 1, precoUnit: 0 }
+const EMPTY_SVC_LINE = { servicoId: '', nome: '', qtd: 1, precoUnit: 0 }
+
+function sumLines(arr) {
+  return (arr ?? []).reduce((s, it) => s + (Number(it.precoUnit) || 0) * (Number(it.qtd) || 1), 0)
+}
 
 function getCompliance(petId, protocol, applications) {
   const petApps = applications
     .filter(a => a.petId === petId && a.protocolId === protocol.id)
     .sort((a, b) => a.date.localeCompare(b.date))
 
-  if (petApps.length === 0) {
+  if (petApps.length === 0)
     return { status: 'pending', label: 'Pendente', color: 'neutral', lastDate: null, nextDue: null, applied: 0 }
-  }
 
   const lastApp = petApps[petApps.length - 1]
   const applied = petApps.length
@@ -56,12 +65,11 @@ function getCompliance(petId, protocol, applications) {
     return { status: 'incomplete', label: `${applied}/${protocol.doses} doses`, color: 'warning', lastDate: lastApp.date, nextDue, applied }
   }
 
-  if (!protocol.annualBooster) {
+  if (!protocol.annualBooster)
     return { status: 'complete', label: 'Completo', color: 'success', lastDate: lastApp.date, nextDue: null, applied }
-  }
 
-  const todayDate = new Date(TODAY + 'T00:00')
-  const lastDate  = new Date(lastApp.date + 'T00:00')
+  const todayDate   = new Date(TODAY + 'T00:00')
+  const lastDate    = new Date(lastApp.date + 'T00:00')
   const nextBooster = new Date(lastDate)
   nextBooster.setFullYear(nextBooster.getFullYear() + 1)
   const nextDue = nextBooster.toISOString().split('T')[0]
@@ -72,9 +80,8 @@ function getCompliance(petId, protocol, applications) {
   }
 
   const daysLeft = Math.round((nextBooster - todayDate) / 864e5)
-  if (daysLeft <= 30) {
+  if (daysLeft <= 30)
     return { status: 'due-soon', label: `Reforço em ${daysLeft}d`, color: 'warning', lastDate: lastApp.date, nextDue, applied }
-  }
 
   return { status: 'up-to-date', label: 'Em dia', color: 'success', lastDate: lastApp.date, nextDue, applied }
 }
@@ -87,28 +94,50 @@ function fmtDate(dateStr) {
 export default function VacinaProtocoloPage() {
   const { hasRole } = useAuth()
   const [protocols, setProtocols]       = usePersistentState('petvet-vac-protocols', INITIAL_PROTOCOLS)
+  const [produtosEstoque]               = usePersistentState('petvet-produtos', PRODUTOS)
+  const [catalogoSvc]                   = usePersistentState('petvet-catalogo', SERVICOS_CATALOGO)
   const [applications, setApplications] = usePersistentState('petvet-vac-apps', INITIAL_APPLICATIONS)
-  const [activeTab, setActiveTab]     = useState('protocolos')
+  const [petsLS]                        = usePersistentState('petvet-pets', PETS)
+  const [activeTab, setActiveTab]       = useState('protocolos')
   const [selectedPetId, setSelectedPetId] = useState('')
 
   const [showProtoModal, setShowProtoModal] = useState(false)
   const [editingProto, setEditingProto]     = useState(null)
   const [protoForm, setProtoForm]           = useState(EMPTY_PROTO)
 
-  const [showAppModal, setShowAppModal] = useState(false)
-  const [appForm, setAppForm]           = useState(EMPTY_APP)
-  const [appPetSearch, setAppPetSearch] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [showAppModal, setShowAppModal]   = useState(false)
+  const [appForm, setAppForm]             = useState(EMPTY_APP)
+  const [appPetSearch, setAppPetSearch]   = useState('')
+  const [deleteTarget, setDeleteTarget]       = useState(null)
   const [deleteAppTarget, setDeleteAppTarget] = useState(null)
 
-  function openAddProto() { setEditingProto(null); setProtoForm(EMPTY_PROTO); setShowProtoModal(true) }
-  function openEditProto(p) { setEditingProto(p); setProtoForm({ ...p }); setShowProtoModal(true) }
+  // ── Protocol CRUD ──────────────────────────────────────────────
+  function openAddProto() {
+    setEditingProto(null)
+    setProtoForm(EMPTY_PROTO)
+    setShowProtoModal(true)
+  }
+  function openEditProto(p) {
+    setEditingProto(p)
+    setProtoForm({
+      ...EMPTY_PROTO, ...p,
+      vacinas:      Array.isArray(p.vacinas)      ? p.vacinas      : [],
+      medicamentos: Array.isArray(p.medicamentos)  ? p.medicamentos : [],
+      servicos:     Array.isArray(p.servicos)      ? p.servicos     : [],
+      precoTotal:   Number(p.precoTotal) || 0,
+    })
+    setShowProtoModal(true)
+  }
   function saveProto() {
     if (!protoForm.name) return
+    const precoTotal = sumLines(protoForm.vacinas) + sumLines(protoForm.medicamentos) + sumLines(protoForm.servicos)
+    const formData = { ...protoForm, precoTotal }
+    delete formData.produtoId
+    delete formData.servicoId
     if (editingProto) {
-      setProtocols(prev => prev.map(p => p.id === editingProto.id ? { ...protoForm, id: editingProto.id } : p))
+      setProtocols(prev => prev.map(p => p.id === editingProto.id ? { ...formData, id: editingProto.id } : p))
     } else {
-      setProtocols(prev => [...prev, { ...protoForm, id: `vp${Date.now()}` }])
+      setProtocols(prev => [...prev, { ...formData, id: `vp${Date.now()}` }])
     }
     setShowProtoModal(false)
   }
@@ -117,6 +146,43 @@ export default function VacinaProtocoloPage() {
     setApplications(prev => prev.filter(a => a.protocolId !== id))
   }
 
+  // ── Array helpers — vacinas ────────────────────────────────────
+  const addVacina    = () => setProtoForm(f => ({ ...f, vacinas: [...f.vacinas, { ...EMPTY_VAC_LINE }] }))
+  const removeVacina = i  => setProtoForm(f => ({ ...f, vacinas: f.vacinas.filter((_, idx) => idx !== i) }))
+  const updateVacina = (i, field, value) =>
+    setProtoForm(f => ({ ...f, vacinas: f.vacinas.map((v, idx) => idx !== i ? v : { ...v, [field]: value }) }))
+  const selectVacina = (i, produtoId) => {
+    const prod = produtosEstoque.find(p => p.id === produtoId)
+    setProtoForm(f => ({ ...f, vacinas: f.vacinas.map((v, idx) => idx !== i ? v : {
+      ...v, produtoId, nome: prod?.name ?? '', precoUnit: Number(prod?.salePrice) || 0,
+    }) }))
+  }
+
+  // ── Array helpers — medicamentos ───────────────────────────────
+  const addMed    = () => setProtoForm(f => ({ ...f, medicamentos: [...f.medicamentos, { ...EMPTY_MED_LINE }] }))
+  const removeMed = i  => setProtoForm(f => ({ ...f, medicamentos: f.medicamentos.filter((_, idx) => idx !== i) }))
+  const updateMed = (i, field, value) =>
+    setProtoForm(f => ({ ...f, medicamentos: f.medicamentos.map((v, idx) => idx !== i ? v : { ...v, [field]: value }) }))
+  const selectMed = (i, produtoId) => {
+    const prod = produtosEstoque.find(p => p.id === produtoId)
+    setProtoForm(f => ({ ...f, medicamentos: f.medicamentos.map((v, idx) => idx !== i ? v : {
+      ...v, produtoId, nome: prod?.name ?? '', precoUnit: Number(prod?.salePrice) || 0,
+    }) }))
+  }
+
+  // ── Array helpers — serviços ───────────────────────────────────
+  const addSvc    = () => setProtoForm(f => ({ ...f, servicos: [...f.servicos, { ...EMPTY_SVC_LINE }] }))
+  const removeSvc = i  => setProtoForm(f => ({ ...f, servicos: f.servicos.filter((_, idx) => idx !== i) }))
+  const updateSvc = (i, field, value) =>
+    setProtoForm(f => ({ ...f, servicos: f.servicos.map((v, idx) => idx !== i ? v : { ...v, [field]: value }) }))
+  const selectSvc = (i, servicoId) => {
+    const svc = catalogoSvc.find(s => s.id === servicoId)
+    setProtoForm(f => ({ ...f, servicos: f.servicos.map((v, idx) => idx !== i ? v : {
+      ...v, servicoId, nome: svc?.name ?? '', precoUnit: Number(svc?.price) || 0,
+    }) }))
+  }
+
+  // ── Application CRUD ───────────────────────────────────────────
   function openApply(protocolId = '', petId = '') {
     setAppForm({ ...EMPTY_APP, protocolId, petId: petId || selectedPetId })
     setShowAppModal(true)
@@ -127,16 +193,27 @@ export default function VacinaProtocoloPage() {
     setShowAppModal(false)
   }
 
-  const selectedPet = PETS.find(p => p.id === selectedPetId)
-  const eligibleProtocols = selectedPet
-    ? protocols.filter(p => p.species === selectedPet.species)
-    : []
-  const vaccPets = PETS.filter(p => p.species === 'Cão' || p.species === 'Gato')
+  // ── Derived values ─────────────────────────────────────────────
+  const allVaccPets       = Array.isArray(petsLS) ? petsLS : PETS
+  const vaccPets          = allVaccPets.filter(p => p.species === 'Cão' || p.species === 'Gato')
+  const selectedPet       = allVaccPets.find(p => p.id === selectedPetId)
+  const eligibleProtocols = selectedPet ? protocols.filter(p => p.species === selectedPet.species) : []
+
+  const vacsParaSelecao = produtosEstoque.filter(p => p.category === 'Vacina' || p.category === 'Medicamento')
+  const medsParaSelecao = produtosEstoque.filter(p => p.category !== 'Vacina')
+
+  const subVac   = sumLines(protoForm.vacinas)
+  const subMed   = sumLines(protoForm.medicamentos)
+  const subSvc   = sumLines(protoForm.servicos)
+  const precoLive = subVac + subMed + subSvc
 
   const tabs = [
     { id: 'protocolos', label: 'Protocolos', count: protocols.length },
     { id: 'aplicacoes', label: 'Aplicações por Pet' },
   ]
+
+  const ROW_STYLE     = { display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }
+  const SEC_HDR_STYLE = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }
 
   return (
     <div className="page">
@@ -155,7 +232,7 @@ export default function VacinaProtocoloPage() {
 
       <Tabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
-      {/* PROTOCOLOS */}
+      {/* ── PROTOCOLOS ─────────────────────────────────────────── */}
       {activeTab === 'protocolos' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {['Cão', 'Gato'].map(species => {
@@ -173,14 +250,25 @@ export default function VacinaProtocoloPage() {
                     <table>
                       <thead>
                         <tr>
-                          <th>Vacina</th><th>Doses</th><th>Intervalo</th><th>Reforço anual</th><th>Idade mín.</th>
+                          <th>Protocolo</th><th>Doses</th><th>Intervalo</th><th>Reforço anual</th><th>Idade mín.</th><th>Preço</th>
                           {hasRole('admin', 'veterinario') && <th>Ações</th>}
                         </tr>
                       </thead>
                       <tbody>
                         {speciesProtos.map(p => (
                           <tr key={p.id}>
-                            <td style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{p.name}</td>
+                            <td>
+                              <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>{p.name}</div>
+                              {(p.vacinas?.length > 0 || p.medicamentos?.length > 0 || p.servicos?.length > 0) && (
+                                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                                  {[
+                                    p.vacinas?.length     ? `${p.vacinas.length} vac.`     : null,
+                                    p.medicamentos?.length? `${p.medicamentos.length} med.` : null,
+                                    p.servicos?.length    ? `${p.servicos.length} svc.`     : null,
+                                  ].filter(Boolean).join(' · ')}
+                                </div>
+                              )}
+                            </td>
                             <td>{p.doses}x</td>
                             <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{p.intervalDays ? `${p.intervalDays} dias` : '—'}</td>
                             <td>
@@ -189,15 +277,14 @@ export default function VacinaProtocoloPage() {
                                 : <span className="badge badge-neutral">Não</span>}
                             </td>
                             <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{p.minAgeMonths} meses</td>
+                            <td style={{ fontWeight: 700, color: 'var(--teal)', fontSize: '0.875rem' }}>
+                              {Number(p.precoTotal) > 0 ? `R$ ${Number(p.precoTotal).toFixed(2)}` : '—'}
+                            </td>
                             {hasRole('admin', 'veterinario') && (
                               <td>
                                 <div style={{ display: 'flex', gap: 4 }}>
                                   <button className="btn btn-outline btn-sm" onClick={() => openEditProto(p)}>Editar</button>
-                                  <button
-                                    className="btn btn-ghost btn-sm"
-                                    style={{ color: 'var(--danger)' }}
-                                    onClick={() => setDeleteTarget(p)}
-                                  >
+                                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setDeleteTarget(p)}>
                                     <Trash2 size={13} />
                                   </button>
                                 </div>
@@ -215,7 +302,7 @@ export default function VacinaProtocoloPage() {
         </div>
       )}
 
-      {/* APLICAÇÕES */}
+      {/* ── APLICAÇÕES ─────────────────────────────────────────── */}
       {activeTab === 'aplicacoes' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card" style={{ padding: '14px 16px' }}>
@@ -250,9 +337,7 @@ export default function VacinaProtocoloPage() {
                 <div className="table-wrapper">
                   <table>
                     <thead>
-                      <tr>
-                        <th>Vacina</th><th>Status</th><th>Doses</th><th>Última aplicação</th><th>Próximo reforço</th><th>Ação</th>
-                      </tr>
+                      <tr><th>Vacina</th><th>Status</th><th>Doses</th><th>Última aplicação</th><th>Próximo reforço</th><th>Ação</th></tr>
                     </thead>
                     <tbody>
                       {eligibleProtocols.map(proto => {
@@ -263,9 +348,7 @@ export default function VacinaProtocoloPage() {
                             <td><span className={`badge badge-${c.color}`}>{c.label}</span></td>
                             <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{c.applied}/{proto.doses}</td>
                             <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{fmtDate(c.lastDate)}</td>
-                            <td style={{ fontSize: '0.8125rem', color: c.status === 'overdue' ? 'var(--danger)' : 'var(--text-muted)' }}>
-                              {fmtDate(c.nextDue)}
-                            </td>
+                            <td style={{ fontSize: '0.8125rem', color: c.status === 'overdue' ? 'var(--danger)' : 'var(--text-muted)' }}>{fmtDate(c.nextDue)}</td>
                             <td>
                               <button className="btn btn-outline btn-sm" onClick={() => openApply(proto.id, selectedPetId)}>
                                 {c.status === 'up-to-date' || c.status === 'overdue' ? 'Reforço' : 'Aplicar'}
@@ -286,32 +369,27 @@ export default function VacinaProtocoloPage() {
                   </h3>
                   <div className="table-wrapper" style={{ margin: 0 }}>
                     <table>
-                      <thead>
-                        <tr><th>Data</th><th>Vacina</th><th>Dose</th><th>Lote</th><th>Veterinário</th><th></th></tr>
-                      </thead>
+                      <thead><tr><th>Data</th><th>Vacina</th><th>Dose</th><th>Lote</th><th>Veterinário</th><th></th></tr></thead>
                       <tbody>
-                        {applications
-                          .filter(a => a.petId === selectedPetId)
-                          .sort((a, b) => b.date.localeCompare(a.date))
-                          .map(a => {
-                            const proto = protocols.find(p => p.id === a.protocolId)
-                            return (
-                              <tr key={a.id}>
-                                <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>{fmtDate(a.date)}</td>
-                                <td style={{ fontWeight: 600, fontSize: '0.875rem' }}>{proto?.name ?? '—'}</td>
-                                <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{a.dose}ª dose</td>
-                                <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--teal)' }}>{a.lot || '—'}</td>
-                                <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{a.vet || '—'}</td>
-                                <td>
-                                  {hasRole('admin', 'veterinario') && (
-                                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setDeleteAppTarget(a)}>
-                                      <Trash2 size={13} />
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            )
-                          })}
+                        {applications.filter(a => a.petId === selectedPetId).sort((a, b) => b.date.localeCompare(a.date)).map(a => {
+                          const proto = protocols.find(p => p.id === a.protocolId)
+                          return (
+                            <tr key={a.id}>
+                              <td style={{ fontSize: '0.8125rem', whiteSpace: 'nowrap' }}>{fmtDate(a.date)}</td>
+                              <td style={{ fontWeight: 600, fontSize: '0.875rem' }}>{proto?.name ?? '—'}</td>
+                              <td style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>{a.dose}ª dose</td>
+                              <td style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--teal)' }}>{a.lot || '—'}</td>
+                              <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{a.vet || '—'}</td>
+                              <td>
+                                {hasRole('admin', 'veterinario') && (
+                                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => setDeleteAppTarget(a)}>
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -322,12 +400,12 @@ export default function VacinaProtocoloPage() {
         </div>
       )}
 
-      {/* Modal Protocolo */}
+      {/* ── MODAL PROTOCOLO ────────────────────────────────────── */}
       <Modal
         isOpen={showProtoModal}
         onClose={() => setShowProtoModal(false)}
         title={editingProto ? 'Editar Protocolo' : 'Novo Protocolo'}
-        size="md"
+        size="lg"
         footer={
           <>
             <button className="btn btn-ghost" onClick={() => setShowProtoModal(false)}>Cancelar</button>
@@ -335,46 +413,174 @@ export default function VacinaProtocoloPage() {
           </>
         }
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+          {/* Dados básicos */}
           <div className="form-group">
-            <label className="form-label">Nome da vacina *</label>
-            <input className="form-input" value={protoForm.name} onChange={e => setProtoForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Antirrábica, V8/V10..." />
+            <label className="form-label">Nome do protocolo *</label>
+            <input className="form-input" value={protoForm.name}
+              onChange={e => setProtoForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="Ex: Protocolo V10 Completo, Antirrábica..." />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
             <div className="form-group">
               <label className="form-label">Espécie</label>
               <select className="form-select" value={protoForm.species} onChange={e => setProtoForm(f => ({ ...f, species: e.target.value }))}>
-                <option>Cão</option>
-                <option>Gato</option>
-                <option>Outros</option>
+                <option>Cão</option><option>Gato</option><option>Outros</option>
               </select>
             </div>
             <div className="form-group">
               <label className="form-label">Nº de doses</label>
-              <input type="number" min="1" max="5" className="form-input" value={protoForm.doses} onChange={e => setProtoForm(f => ({ ...f, doses: Number(e.target.value) }))} />
+              <input type="number" min="1" max="5" className="form-input" value={protoForm.doses}
+                onChange={e => setProtoForm(f => ({ ...f, doses: Number(e.target.value) }))} />
             </div>
             <div className="form-group">
               <label className="form-label">Intervalo entre doses (dias)</label>
-              <input type="number" min="0" className="form-input" value={protoForm.intervalDays ?? ''} onChange={e => setProtoForm(f => ({ ...f, intervalDays: e.target.value ? Number(e.target.value) : null }))} placeholder="Ex: 21" />
+              <input type="number" min="0" className="form-input" value={protoForm.intervalDays ?? ''}
+                onChange={e => setProtoForm(f => ({ ...f, intervalDays: e.target.value ? Number(e.target.value) : null }))}
+                placeholder="Ex: 21" />
             </div>
             <div className="form-group">
               <label className="form-label">Idade mínima (meses)</label>
-              <input type="number" min="0" className="form-input" value={protoForm.minAgeMonths} onChange={e => setProtoForm(f => ({ ...f, minAgeMonths: Number(e.target.value) }))} />
+              <input type="number" min="0" className="form-input" value={protoForm.minAgeMonths}
+                onChange={e => setProtoForm(f => ({ ...f, minAgeMonths: Number(e.target.value) }))} />
             </div>
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={protoForm.annualBooster}
+            <input type="checkbox" checked={protoForm.annualBooster}
               style={{ accentColor: 'var(--teal)', width: 16, height: 16 }}
-              onChange={e => setProtoForm(f => ({ ...f, annualBooster: e.target.checked }))}
-            />
+              onChange={e => setProtoForm(f => ({ ...f, annualBooster: e.target.checked }))} />
             <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Requer reforço anual</span>
           </label>
+
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: 0 }} />
+
+          {/* Seção Vacinas / Produtos */}
+          <div>
+            <div style={SEC_HDR_STYLE}>
+              <div>
+                <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>Vacinas / Produtos</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Produtos do estoque (Vacina ou Medicamento)</p>
+              </div>
+              <button type="button" className="btn btn-outline btn-sm" onClick={addVacina}><Plus size={13} /> Adicionar</button>
+            </div>
+            {protoForm.vacinas.length === 0 && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '4px 0' }}>Nenhum produto vinculado</p>
+            )}
+            {protoForm.vacinas.map((v, i) => (
+              <div key={i} style={ROW_STYLE}>
+                <select className="form-select" style={{ flex: 1, minWidth: 0 }} value={v.produtoId} onChange={e => selectVacina(i, e.target.value)}>
+                  <option value="">— Selecione produto —</option>
+                  {vacsParaSelecao.map(p => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
+                </select>
+                <input type="number" min="1" className="form-input" style={{ width: 52, textAlign: 'center', padding: '6px 4px' }}
+                  value={v.qtd} onChange={e => updateVacina(i, 'qtd', Number(e.target.value) || 1)} title="Quantidade" />
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', flexShrink: 0 }}>×</span>
+                <input type="number" min="0" step="0.01" className="form-input" style={{ width: 80, padding: '6px 4px' }}
+                  value={v.precoUnit} onChange={e => updateVacina(i, 'precoUnit', Number(e.target.value) || 0)} title="Preço un. (R$)" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--teal)', flexShrink: 0, width: 76, textAlign: 'right' }}>
+                  = R$ {((Number(v.precoUnit) || 0) * (Number(v.qtd) || 1)).toFixed(2)}
+                </span>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', padding: '4px 6px', flexShrink: 0 }} onClick={() => removeVacina(i)}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Seção Medicamentos adicionais */}
+          <div>
+            <div style={SEC_HDR_STYLE}>
+              <div>
+                <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>Medicamentos adicionais</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Produtos do estoque (exceto vacinas)</p>
+              </div>
+              <button type="button" className="btn btn-outline btn-sm" onClick={addMed}><Plus size={13} /> Adicionar</button>
+            </div>
+            {protoForm.medicamentos.length === 0 && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '4px 0' }}>Nenhum medicamento vinculado</p>
+            )}
+            {protoForm.medicamentos.map((m, i) => (
+              <div key={i} style={ROW_STYLE}>
+                <select className="form-select" style={{ flex: 1, minWidth: 0 }} value={m.produtoId} onChange={e => selectMed(i, e.target.value)}>
+                  <option value="">— Selecione medicamento —</option>
+                  {medsParaSelecao.map(p => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
+                </select>
+                <input type="number" min="1" className="form-input" style={{ width: 52, textAlign: 'center', padding: '6px 4px' }}
+                  value={m.qtd} onChange={e => updateMed(i, 'qtd', Number(e.target.value) || 1)} title="Quantidade" />
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', flexShrink: 0 }}>×</span>
+                <input type="number" min="0" step="0.01" className="form-input" style={{ width: 80, padding: '6px 4px' }}
+                  value={m.precoUnit} onChange={e => updateMed(i, 'precoUnit', Number(e.target.value) || 0)} title="Preço un. (R$)" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--teal)', flexShrink: 0, width: 76, textAlign: 'right' }}>
+                  = R$ {((Number(m.precoUnit) || 0) * (Number(m.qtd) || 1)).toFixed(2)}
+                </span>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', padding: '4px 6px', flexShrink: 0 }} onClick={() => removeMed(i)}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Seção Serviços */}
+          <div>
+            <div style={SEC_HDR_STYLE}>
+              <div>
+                <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>Serviços</p>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Serviços do consultório</p>
+              </div>
+              <button type="button" className="btn btn-outline btn-sm" onClick={addSvc}><Plus size={13} /> Adicionar</button>
+            </div>
+            {protoForm.servicos.length === 0 && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '4px 0' }}>Nenhum serviço vinculado</p>
+            )}
+            {protoForm.servicos.map((s, i) => (
+              <div key={i} style={ROW_STYLE}>
+                <select className="form-select" style={{ flex: 1, minWidth: 0 }} value={s.servicoId} onChange={e => selectSvc(i, e.target.value)}>
+                  <option value="">— Selecione serviço —</option>
+                  {catalogoSvc.map(sv => <option key={sv.id} value={sv.id}>{sv.name} ({sv.category})</option>)}
+                </select>
+                <input type="number" min="1" className="form-input" style={{ width: 52, textAlign: 'center', padding: '6px 4px' }}
+                  value={s.qtd} onChange={e => updateSvc(i, 'qtd', Number(e.target.value) || 1)} title="Quantidade" />
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', flexShrink: 0 }}>×</span>
+                <input type="number" min="0" step="0.01" className="form-input" style={{ width: 80, padding: '6px 4px' }}
+                  value={s.precoUnit} onChange={e => updateSvc(i, 'precoUnit', Number(e.target.value) || 0)} title="Preço un. (R$)" />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--teal)', flexShrink: 0, width: 76, textAlign: 'right' }}>
+                  = R$ {((Number(s.precoUnit) || 0) * (Number(s.qtd) || 1)).toFixed(2)}
+                </span>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', padding: '4px 6px', flexShrink: 0 }} onClick={() => removeSvc(i)}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Resumo de preços */}
+          {precoLive > 0 && (
+            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', fontSize: '0.8125rem' }}>
+              {subVac > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  <span>Subtotal vacinas/produtos</span><span>R$ {subVac.toFixed(2)}</span>
+                </div>
+              )}
+              {subMed > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  <span>Subtotal medicamentos</span><span>R$ {subMed.toFixed(2)}</span>
+                </div>
+              )}
+              {subSvc > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)', marginBottom: 4 }}>
+                  <span>Subtotal serviços</span><span>R$ {subSvc.toFixed(2)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, borderTop: '2px solid var(--border)', paddingTop: 8, marginTop: 4, color: 'var(--teal)', fontSize: '0.9375rem' }}>
+                <span>TOTAL DO PROTOCOLO</span><span>R$ {precoLive.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
 
-      {/* Modal Aplicação */}
+      {/* ── MODAL APLICAÇÃO ────────────────────────────────────── */}
       <Modal
         isOpen={showAppModal}
         onClose={() => setShowAppModal(false)}
@@ -390,13 +596,8 @@ export default function VacinaProtocoloPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="form-group">
             <label className="form-label">Pet</label>
-            <input
-              className="form-input"
-              placeholder="Digitar nome ou raça para filtrar..."
-              value={appPetSearch}
-              onChange={e => setAppPetSearch(e.target.value)}
-              style={{ marginBottom: 6 }}
-            />
+            <input className="form-input" placeholder="Digitar nome ou raça para filtrar..." value={appPetSearch}
+              onChange={e => setAppPetSearch(e.target.value)} style={{ marginBottom: 6 }} />
             <select className="form-select" value={appForm.petId} onChange={e => { setAppForm(f => ({ ...f, petId: e.target.value })); setAppPetSearch('') }}>
               <option value="">— Selecione —</option>
               {vaccPets
@@ -409,7 +610,7 @@ export default function VacinaProtocoloPage() {
             <select className="form-select" value={appForm.protocolId} onChange={e => setAppForm(f => ({ ...f, protocolId: e.target.value }))}>
               <option value="">— Selecione —</option>
               {protocols
-                .filter(p => !appForm.petId || p.species === (PETS.find(pt => pt.id === appForm.petId)?.species))
+                .filter(p => !appForm.petId || p.species === (allVaccPets.find(pt => pt.id === appForm.petId)?.species))
                 .map(p => <option key={p.id} value={p.id}>{p.name} ({p.species})</option>)}
             </select>
           </div>

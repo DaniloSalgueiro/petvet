@@ -50,7 +50,44 @@ function AppShell() {
   )
 }
 
+const PLANOS_MODULOS = {
+  basico: ['dashboard','pets','prontuario','agenda','configuracoes'],
+  plus:   ['dashboard','pets','prontuario','agenda','vacinaprotocolo','bulario','estoque','servicos','configuracoes'],
+  pro:    null,
+}
+
+const PAGE_NAMES = {
+  estoque: 'Estoque', servicos: 'Serviços', financeiro: 'Financeiro',
+  usuarios: 'Usuários', pdv: 'PDV', vacinaprotocolo: 'Vacinas',
+  funcionarios: 'Funcionários', 'prontuario-config': 'Config. Prontuário',
+  racas: 'Raças', bulario: 'Bulário', relatorios: 'Relatórios',
+}
+
+function getPlano() {
+  try { return JSON.parse(localStorage.getItem('petvet-ss-config') ?? '{}').plano || 'pro' }
+  catch { return 'pro' }
+}
+
+function ModuloNaoDisponivel({ name }) {
+  return (
+    <div className="page">
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, gap: 12, textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '3rem' }}>🔒</div>
+        <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>{name || 'Módulo'} não disponível</p>
+        <p style={{ fontSize: '0.875rem' }}>Este módulo não está incluído no plano atual.<br/>Entre em contato com a Salgueiro Systems para fazer upgrade.</p>
+      </div>
+    </div>
+  )
+}
+
 function PageRouter({ page, navParams, navigateTo }) {
+  const plano = getPlano()
+  const modulosAtivos = PLANOS_MODULOS[plano] ?? null
+
+  if (modulosAtivos && !modulosAtivos.includes(page)) {
+    return <ModuloNaoDisponivel name={PAGE_NAMES[page] ?? page} />
+  }
+
   switch (page) {
     case 'dashboard':  return <Dashboard navigateTo={navigateTo} />
     case 'pets':       return <PetsPage navigateTo={navigateTo} navParams={navParams} />

@@ -507,6 +507,23 @@ input, textarea, select, button {
 }
 
 /* =========================================================
+   SALGUEIRO SYSTEMS — brand text
+   ========================================================= */
+.ss-brand-text {
+  font-size: 11px;
+  color: #1a3a6b;
+  opacity: 0.6;
+  text-align: center;
+  margin: 0;
+}
+[data-theme="dark"] .ss-brand-text {
+  color: #D4AF37;
+}
+.ss-brand-link {
+  font-weight: 700;
+}
+
+/* =========================================================
    IMPRESSÃO — @media print
    ========================================================= */
 @media print {
@@ -555,5 +572,17 @@ input, textarea, select, button {
   @page {
     size: A4;
     margin: 15mm 20mm;
+  }
+
+  body::after {
+    content: 'Sistema PetVet — Desenvolvido por Salgueiro Systems';
+    display: block;
+    font-size: 8px;
+    color: #aaaaaa;
+    text-align: center;
+    padding-top: 12px;
+    border-top: 1px solid #dddddd;
+    margin-top: 20px;
+    font-family: Arial, sans-serif;
   }
 }

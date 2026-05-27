@@ -9,9 +9,12 @@ import { normIncludes, norm } from '../utils/normalizeText'
 import { usePersistentState } from '../hooks/usePersistentState'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { calcularIdade } from '../utils/calcularIdade'
+import { generateProntuarioPrint } from '../utils/generateProntuarioPrint'
+import { generateFichaHTML } from '../utils/generateFichaHTML'
+import { maskCPF, maskRG, maskPhone } from '../utils/masks'
 
 // ---- Tipos de consulta e config padrão ----
-export const TIPOS_CONSULTA_DEFAULT = ['Consulta Clínica Geral', 'Consulta Dermatológica', 'Consulta Canábica', 'Retorno']
+export const TIPOS_CONSULTA_DEFAULT = ['Consulta Clínica Geral', 'Consulta Dermatológica', 'Consulta Canábica', 'Retorno', 'Cirurgia']
 export const SECTIONS_CONFIGURABLES = [
   { id: 'anamnese',           label: 'Anamnese' },
   { id: 'derma',              label: 'Derma' },
@@ -387,6 +390,7 @@ const SISTEMAS = [
 
 const ALL_SECTIONS = [
   { id: 'tipo',               label: 'Tipo de Consulta' },
+  { id: 'cirurgia',           label: 'Procedimentos Cirúrgicos' },
   { id: 'anamnese',           label: 'Anamnese' },
   { id: 'derma',              label: 'Derma' },
   { id: 'cannabis',           label: 'Cannabis' },
@@ -490,6 +494,10 @@ const EMPTY_FORM = {
   prescricao: { medicamentos: [], retorno: '', orientacoes: '' },
   vacinasAplicadas: [],
   aplicacoes: [],
+  procedimentos: [],
+  cirurgiaMesmoVet: false,
+  cirurgiaVetUnicoId: '',
+  precoTotalCirurgia: 0,
   anexos: [],
   assinatura: null,
 }
@@ -700,11 +708,41 @@ export default function ProntuarioPage({ navParams = {} }) {
   const [prescBulaMed, setPrescBulaMed] = useState(null)
   const [termoRequest, setTermoRequest] = useState(null)
   const [tabAnterior, setTabAnterior] = useState(null)
+  const [showFichasModal, setShowFichasModal] = useState(false)
+  const [fichasTab, setFichasTab] = useState('imprimir')
+  const [fichasWa, setFichasWa] = useState({ petId: '', tipo: null, msg: '' })
+  const [fichasWaSearch, setFichasWaSearch] = useState('')
+  const [petsLS, setPetsLS] = usePersistentState('petvet-pets', PETS)
+  const [tutoresLS, setTutoresLS] = usePersistentState('petvet-tutores', TUTORES)
+
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportConfirmed, setExportConfirmed] = useState(false)
+  const [exportFiltro, setExportFiltro] = useState({ tipo: 'todos', de: '', ate: '', petId: '', vetId: '' })
+  const [exportSuccess, setExportSuccess] = useState(null)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importData, setImportData] = useState(null)
+  const [importMode, setImportMode] = useState('novos')
+  const [importSuccess, setImportSuccess] = useState(null)
+  const importFileRef = useRef(null)
+
+  // Migrate stored config: ensure all DEFAULT tipos exist (e.g. 'Cirurgia' added later)
+  useEffect(() => {
+    const missingTipos = TIPOS_CONSULTA_DEFAULT.filter(t => !prontuarioConfig.tipos.includes(t))
+    if (missingTipos.length > 0) {
+      const novosTipos = [...prontuarioConfig.tipos, ...missingTipos]
+      const novoSectionConfig = { ...prontuarioConfig.sectionConfig }
+      for (const t of missingTipos) {
+        novoSectionConfig[t] = Object.fromEntries(SECTIONS_CONFIGURABLES.map(s => [s.id, { visible: true }]))
+      }
+      setProntuarioConfig({ tipos: novosTipos, sectionConfig: novoSectionConfig })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Visible sections based on selected type and config
   const visibleSections = useMemo(() => {
     return ALL_SECTIONS.filter(s => {
       if (s.id === 'tipo') return true
+      if (s.id === 'cirurgia') return form.tipoConsulta === 'Cirurgia'
       const typeConf = prontuarioConfig?.sectionConfig?.[form.tipoConsulta]
       if (!typeConf) return true
       return typeConf[s.id]?.visible !== false
@@ -789,6 +827,131 @@ export default function ProntuarioPage({ navParams = {} }) {
     setView('list')
   }
 
+  function handlePrintProntuario() {
+    const petInfo  = PETS.find(p => p.id === form.petId) ?? null
+    const tutorInfo = petInfo ? TUTORES.find(t => t.id === petInfo.tutorId) ?? null : null
+    const vetInfo  = findVetById(form.vetId)
+    const { htmlContent } = generateProntuarioPrint({
+      form: { ...form, id: selectedPr?.id },
+      petInfo,
+      tutorInfo,
+      vetInfo,
+      signatureData,
+      examGroups: EXAM_GROUPS,
+    })
+    const win = window.open('', '_blank', 'width=850,height=800')
+    if (!win) return
+    win.document.write(htmlContent)
+    win.document.close()
+    // Save copy to Anexos
+    const dateStr = form.date ? new Date(form.date + 'T00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')
+    const anexoNome = `Prontuário Completo — ${dateStr}`
+    if (!form.anexos?.find(a => a.nome === anexoNome)) {
+      setForm(f => ({
+        ...f,
+        anexos: [
+          ...(f.anexos ?? []),
+          { nome: anexoNome, tipo: 'prontuario', conteudoHtml: htmlContent, dataAdicionado: new Date().toISOString() },
+        ],
+      }))
+    }
+  }
+
+  function handleOpenFicha(tipo) {
+    setShowFichasModal(false)
+    const html = generateFichaHTML(tipo, { corpImgSrc: corpImg })
+    const win = window.open('', '_blank', 'width=850,height=800')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    win.print()
+  }
+
+  function generateFichaTexto(tipo, tutorNome, petNome, dataConsulta) {
+    const _ = '___________'
+    const yn = `( ) Sim  ( ) Não`
+    const clinicaNome = (() => { try { const c = JSON.parse(localStorage.getItem('petvet-clinica-config') ?? '{}'); return c.nome || 'Emporium Vazpet & Tatá Bichos' } catch { return 'Emporium Vazpet & Tatá Bichos' } })()
+    const dataFmt = dataConsulta ? new Date(dataConsulta + 'T00:00').toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')
+    const header = `Olá, ${tutorNome || 'tutor(a)'}! 🐾\nAntes da consulta de *${petNome || 'seu pet'}* em ${dataFmt}, pedimos que preencha a ficha abaixo e responda esta mensagem com as informações:\n`
+
+    if (tipo === 'anamnese') {
+      return header + `\n📋 *FICHA DE ANAMNESE*\n\n` +
+        `1. Queixa principal: ${_}\n` +
+        `2. Tempo de evolução: ${_}\n` +
+        `3. Vômito: ${yn} — Frequência: ${_}\n` +
+        `4. Diarreia: ${yn} — Frequência: ${_}\n` +
+        `5. Apetite: ( ) Normal  ( ) Aumentado  ( ) Diminuído  ( ) Ausente\n` +
+        `6. Sede: ( ) Normal  ( ) Aumentada  ( ) Diminuída\n` +
+        `7. Esforço urinário: ${yn}\n` +
+        `8. Tosse ou espirro: ${yn}\n` +
+        `9. Secreção nasal/ocular: ${yn} — Tipo: ${_}\n` +
+        `10. Convulsão: ${yn}\n` +
+        `11. Medicamentos em uso: ${_}\n` +
+        `12. Vacinação em dia: ${yn}\n` +
+        `13. Vermifugação (produto e data): ${_}\n` +
+        `14. Histórico cirúrgico: ${_}\n` +
+        `15. Ambiente: ( ) Interno  ( ) Externo  ( ) Misto\n` +
+        `16. Contato com outros animais: ${yn}\n\n` +
+        `Obrigado! ${clinicaNome} 🐾`
+    }
+
+    if (tipo === 'derma') {
+      return header + `\n🔬 *FICHA DERMATOLÓGICA*\n\n` +
+        `1. Queixa principal: ${_}\n` +
+        `2. Tempo de evolução: ${_}\n` +
+        `3. Já tratou anteriormente: ${yn} — Com quê: ${_}\n` +
+        `4. Prurido (coceira): ${yn} — Intensidade (0-10): ${_}\n` +
+        `5. Lambedura: ${yn} — Local: ${_}\n` +
+        `6. Auto-trauma (arranhar/esfregar): ${yn}\n` +
+        `7. Lesões em: ( ) Corpo  ( ) Cabeça  ( ) Patas  ( ) Orelhas  ( ) Outros: ${_}\n` +
+        `8. Ambiente: ( ) Interno  ( ) Externo  ( ) Misto\n` +
+        `9. Alimentação: ( ) Ração  ( ) Natural  ( ) Mista — Marca: ${_}\n` +
+        `10. Contato com produtos químicos: ${yn} — Quais: ${_}\n` +
+        `11. Pulgas/carrapatos visíveis: ${yn}\n` +
+        `12. Piorou com: ( ) Calor  ( ) Frio  ( ) Chuva  ( ) Sem relação\n\n` +
+        `Obrigado! ${clinicaNome} 🐾`
+    }
+
+    if (tipo === 'cannabis') {
+      return header + `\n🌿 *FICHA CANÁBICA*\n\n` +
+        `1. Condição/diagnóstico principal: ${_}\n` +
+        `2. Comorbidades (outras condições): ${_}\n` +
+        `3. Medicamentos em uso atualmente: ${_}\n` +
+        `4. Tentativas de tratamento anteriores: ${_}\n` +
+        `5. Qualidade de vida atual (0-10): ${_}\n` +
+        `6. Nível de dor (0-10): ${_}\n` +
+        `7. Apetite: ( ) Normal  ( ) Aumentado  ( ) Diminuído\n` +
+        `8. Sono: ( ) Normal  ( ) Agitado  ( ) Letárgico\n` +
+        `9. Nível de atividade: ( ) Normal  ( ) Aumentado  ( ) Diminuído\n` +
+        `10. Episódios de agressividade: ${yn}\n` +
+        `11. Convulsões: ${yn} — Frequência: ${_}\n` +
+        `12. Tutor concorda com uso de cannabis medicinal: ${yn}\n\n` +
+        `Obrigado! ${clinicaNome} 🐾`
+    }
+    return ''
+  }
+
+  function handleGenerateFichaWa(tipo) {
+    const allPets = Array.isArray(petsLS) ? petsLS : PETS
+    const allTutores = Array.isArray(tutoresLS) ? tutoresLS : TUTORES
+    const pet = allPets.find(p => p.id === fichasWa.petId)
+    const tutor = pet ? allTutores.find(t => t.id === pet.tutorId) : null
+    const msg = generateFichaTexto(tipo, tutor?.name, pet?.name, new Date().toISOString().split('T')[0])
+    setFichasWa(s => ({ ...s, tipo, msg }))
+  }
+
+  function handleSendFichaWa() {
+    const allPets = Array.isArray(petsLS) ? petsLS : PETS
+    const allTutores = Array.isArray(tutoresLS) ? tutoresLS : TUTORES
+    const pet = allPets.find(p => p.id === fichasWa.petId)
+    const tutor = pet ? allTutores.find(t => t.id === pet.tutorId) : null
+    const digits = (tutor?.phone ?? '').replace(/\D/g, '')
+    const phone = digits.startsWith('55') && digits.length >= 12 ? digits : '55' + digits
+    if (!phone || phone.length < 12) { alert('Número de telefone do tutor não encontrado ou inválido.'); return }
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(fichasWa.msg)}`, '_blank')
+  }
+
   function addTipo() {
     const t = newTipoInput.trim()
     if (!t || prontuarioConfig.tipos.includes(t)) return
@@ -831,10 +994,10 @@ export default function ProntuarioPage({ navParams = {} }) {
               {petInfo && <p className="page-subtitle">{petInfo.name} · {tutorInfo?.name}</p>}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {selectedPr && (
-              <button className="btn btn-outline btn-sm" onClick={() => window.print()}>
-                <Printer size={14} /> Imprimir
+              <button className="btn btn-outline btn-sm" onClick={handlePrintProntuario}>
+                <Printer size={14} /> Imprimir Prontuário
               </button>
             )}
             {!isReadOnly && <button className="btn btn-primary" onClick={saveProntuario}>Salvar Prontuário</button>}
@@ -949,6 +1112,28 @@ export default function ProntuarioPage({ navParams = {} }) {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* PROCEDIMENTOS CIRÚRGICOS */}
+            {activeSection === 'cirurgia' && (
+              <CirurgiaSection
+                procedimentos={form.procedimentos ?? []}
+                mesmoVet={form.cirurgiaMesmoVet ?? false}
+                vetUnicoId={form.cirurgiaVetUnicoId ?? ''}
+                vets={vets}
+                isReadOnly={isReadOnly}
+                onChange={arr => setForm(f => ({
+                  ...f,
+                  procedimentos: arr,
+                  precoTotalCirurgia: arr.reduce((s, p) => s + (Number(p.preco) || 0), 0),
+                }))}
+                onMesmoVetChange={v => setForm(f => ({ ...f, cirurgiaMesmoVet: v }))}
+                onVetUnicoChange={(vetId, vetNome) => setForm(f => ({
+                  ...f,
+                  cirurgiaVetUnicoId: vetId,
+                  procedimentos: f.procedimentos.map(p => ({ ...p, vetId, vetNome })),
+                }))}
+              />
             )}
 
             {/* ANAMNESE */}
@@ -1920,6 +2105,24 @@ export default function ProntuarioPage({ navParams = {} }) {
                 vacinasAplicadas={form.vacinasAplicadas ?? []}
                 onChange={arr => setForm(f => ({ ...f, vacinasAplicadas: arr }))}
                 isReadOnly={isReadOnly}
+                onApplyProtocol={proto => {
+                  if (proto.medicamentos?.length > 0) {
+                    const today = new Date().toISOString().split('T')[0]
+                    setForm(f => ({
+                      ...f,
+                      aplicacoes: [
+                        ...(f.aplicacoes ?? []),
+                        ...proto.medicamentos.map(m => ({
+                          nome: m.nome || '',
+                          dose: '',
+                          via: 'SC',
+                          dataAplicacao: today,
+                          obs: `Protocolo: ${proto.name}`,
+                        })),
+                      ],
+                    }))
+                  }
+                }}
               />
             )}
 
@@ -2154,6 +2357,188 @@ export default function ProntuarioPage({ navParams = {} }) {
     )
   }
 
+  function exportarProntuarios(prontsToExport) {
+    const allPets = [...PETS, ...(Array.isArray(petsLS) ? petsLS.filter(p => !PETS.find(mp => mp.id === p.id)) : [])]
+    const allTutores = [...TUTORES, ...(Array.isArray(tutoresLS) ? tutoresLS.filter(t => !TUTORES.find(mt => mt.id === t.id)) : [])]
+    const petsMap = new Map(allPets.map(p => [p.id, p]))
+    const tutoresMap = new Map(allTutores.map(t => [t.id, t]))
+
+    const registros = prontsToExport.map(pr => {
+      const pet = petsMap.get(pr.petId) ?? null
+      const tutor = pet ? tutoresMap.get(pet.tutorId) ?? null : null
+      const vet = findVetById(pr.vetId)
+      const termos = []
+      if (pr.termoRecusaAssinado) termos.push({ tipo: 'recusa_tratamento', dados: pr.termoRecusaDados ?? {} })
+      if (pr.termoDermaAssinado) termos.push({ tipo: 'consentimento_derma', dados: pr.termoDermaDados ?? {} })
+      if (pr.termoCanabisAssinado) termos.push({ tipo: 'cannabis', dados: pr.termoCanabisdados ?? {} })
+      if (pr.termoAcompanhamento) termos.push({ tipo: 'acompanhamento_canabico', dados: {} })
+      if (pr.termoTCLE) termos.push({ tipo: 'tcle', dados: {} })
+      const anexos = (pr.anexos ?? []).map(a => ({
+        nome: a.nome,
+        tipo: a.tipo ?? 'arquivo',
+        dataAdicionado: a.dataAdicionado ?? null,
+        ...(a.conteudo ? { conteudo: a.conteudo } : {}),
+        ...(a.conteudoHtml ? { conteudoHtml: a.conteudoHtml } : {}),
+      }))
+      return {
+        id: pr.id,
+        data: pr.date,
+        tipo: pr.tipoConsulta ?? 'Consulta',
+        status: pr.status ?? 'finalizado',
+        paciente: pet ? { id: pet.id, nome: pet.name, especie: pet.species, raca: pet.breed ?? '', sexo: pet.sex ?? '', cor: pet.color ?? '', peso: pet.weight ?? '', dataNascimento: pet.birthDate ?? '', idade: calcularIdade(pet.birthDate), microchip: pet.microchip ?? '', registroBreeder: pet.registroBreeder ?? '' } : { id: pr.petId },
+        tutor: tutor ? { id: tutor.id, nome: tutor.name, cpf: tutor.cpf ?? '', rg: tutor.rg ?? '', telefone: tutor.phone ?? '', email: tutor.email ?? '', endereco: tutor.address ?? '' } : null,
+        veterinario: vet ? { id: vet.id, nome: vet.name, crmv: vet.crmv ?? '' } : { id: pr.vetId },
+        anamnese: pr.anamnese ?? {},
+        derma: pr.derma ?? {},
+        cannabis: pr.cannabis ?? {},
+        sinaisVitais: pr.vitals ?? {},
+        exameFisico: pr.examesFisicos ?? {},
+        vacinas: pr.vacinas ?? [],
+        aplicacoes: pr.aplicacoes ?? [],
+        procedimentosCirurgicos: pr.cirurgia ?? {},
+        solicitacaoExames: pr.solicitacaoExames ?? {},
+        diagnostico: pr.diagnostico ?? {},
+        prescricao: pr.prescricao ?? [],
+        termos,
+        anexos,
+        assinatura: pr.assinatura ?? null,
+        mapaCorporal: pr.mapaCorporal ?? null,
+        criadoEm: pr.criadoEm ?? pr.date ?? null,
+        atualizadoEm: pr.atualizadoEm ?? null,
+      }
+    })
+
+    const payload = {
+      exportInfo: {
+        sistema: 'PetVet — Salgueiro Systems',
+        versao: '1.0',
+        dataExportacao: new Date().toISOString(),
+        totalRegistros: registros.length,
+        exportadoPor: user?.name ?? 'Admin',
+      },
+      prontuarios: registros,
+    }
+
+    const blob = new Blob(['﻿' + JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `prontuarios_${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    setExportSuccess(registros.length)
+    setShowExportModal(false)
+    setExportConfirmed(false)
+    setExportFiltro({ tipo: 'todos', de: '', ate: '', petId: '', vetId: '' })
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      try {
+        const json = JSON.parse(ev.target.result.replace(/^﻿/, ''))
+        if (json?.exportInfo?.sistema !== 'PetVet — Salgueiro Systems') {
+          alert('Arquivo inválido: não é um export do sistema PetVet.')
+          return
+        }
+        setImportData(json)
+        setImportMode('novos')
+        setShowImportModal(true)
+      } catch {
+        alert('Erro ao ler o arquivo. Verifique se é um JSON válido exportado pelo PetVet.')
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  function confirmarImportacao() {
+    if (!importData) return
+    const allPets = [...PETS, ...(Array.isArray(petsLS) ? petsLS.filter(p => !PETS.find(mp => mp.id === p.id)) : [])]
+    const allTutores = [...TUTORES, ...(Array.isArray(tutoresLS) ? tutoresLS.filter(t => !TUTORES.find(mt => mt.id === t.id)) : [])]
+
+    const novosProts = importData.prontuarios ?? []
+    const existingIds = new Set(prontuarios.map(p => p.id))
+
+    let importados = 0
+    let pulados = 0
+    const toAdd = []
+    const toUpdate = []
+
+    for (const reg of novosProts) {
+      const existe = existingIds.has(reg.id)
+      if (importMode === 'novos' && existe) { pulados++; continue }
+      if (importMode === 'tudo' || importMode === 'sobrescrever') {
+        if (existe && importMode === 'sobrescrever') {
+          toUpdate.push(reg)
+        } else if (!existe) {
+          toAdd.push(reg)
+        } else {
+          toAdd.push(reg)
+        }
+      } else {
+        toAdd.push(reg)
+      }
+      importados++
+    }
+
+    const flat = pr => ({
+      id: pr.id,
+      date: pr.data,
+      tipoConsulta: pr.tipo ?? 'Consulta',
+      status: pr.status ?? 'finalizado',
+      petId: pr.paciente?.id ?? '',
+      vetId: pr.veterinario?.id ?? '',
+      anamnese: pr.anamnese ?? {},
+      derma: pr.derma ?? {},
+      cannabis: pr.cannabis ?? {},
+      vitals: pr.sinaisVitais ?? {},
+      examesFisicos: pr.exameFisico ?? {},
+      vacinas: pr.vacinas ?? [],
+      aplicacoes: pr.aplicacoes ?? [],
+      cirurgia: pr.procedimentosCirurgicos ?? {},
+      solicitacaoExames: pr.solicitacaoExames ?? {},
+      diagnostico: pr.diagnostico ?? {},
+      prescricao: pr.prescricao ?? [],
+      anexos: pr.anexos ?? [],
+      assinatura: pr.assinatura ?? null,
+      mapaCorporal: pr.mapaCorporal ?? null,
+      criadoEm: pr.criadoEm ?? null,
+      atualizadoEm: new Date().toISOString(),
+    })
+
+    setProntuarios(prev => {
+      const updated = importMode === 'sobrescrever'
+        ? prev.map(p => { const u = toUpdate.find(r => r.id === p.id); return u ? flat(u) : p })
+        : prev
+      return [...updated, ...toAdd.map(flat)]
+    })
+
+    // Import pets/tutores not in system
+    const existingPetIds = new Set(allPets.map(p => p.id))
+    const existingTutorIds = new Set(allTutores.map(t => t.id))
+    const newPets = []
+    const newTutores = []
+    for (const reg of novosProts) {
+      if (reg.paciente?.id && !existingPetIds.has(reg.paciente.id)) {
+        newPets.push({ id: reg.paciente.id, name: reg.paciente.nome ?? '', species: reg.paciente.especie ?? '', breed: reg.paciente.raca ?? '', sex: reg.paciente.sexo ?? '', color: reg.paciente.cor ?? '', weight: reg.paciente.peso ?? '', birthDate: reg.paciente.dataNascimento ?? '', microchip: reg.paciente.microchip ?? '', tutorId: reg.tutor?.id ?? '' })
+        existingPetIds.add(reg.paciente.id)
+      }
+      if (reg.tutor?.id && !existingTutorIds.has(reg.tutor.id)) {
+        newTutores.push({ id: reg.tutor.id, name: reg.tutor.nome ?? '', cpf: reg.tutor.cpf ?? '', rg: reg.tutor.rg ?? '', phone: reg.tutor.telefone ?? '', email: reg.tutor.email ?? '', address: reg.tutor.endereco ?? '' })
+        existingTutorIds.add(reg.tutor.id)
+      }
+    }
+    if (newPets.length > 0) setPetsLS(prev => [...(Array.isArray(prev) ? prev : []), ...newPets])
+    if (newTutores.length > 0) setTutoresLS(prev => [...(Array.isArray(prev) ? prev : []), ...newTutores])
+
+    setImportSuccess({ importados, pulados })
+    setShowImportModal(false)
+    setImportData(null)
+  }
+
   // LIST VIEW
   return (
     <div className="page">
@@ -2162,10 +2547,153 @@ export default function ProntuarioPage({ navParams = {} }) {
           <h2 className="page-title">Prontuários</h2>
           <p className="page-subtitle">{prontuarios.length} registros clínicos</p>
         </div>
-        {hasRole('admin', 'veterinario') && (
-          <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Prontuário</button>
-        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-outline btn-sm" onClick={() => setShowFichasModal(true)}>
+            📄 Fichas para preenchimento
+          </button>
+          {hasRole('admin') && (
+            <>
+              <button className="btn btn-outline btn-sm" onClick={() => { setShowExportModal(true); setExportConfirmed(false); setExportSuccess(null) }}>
+                📥 Exportar prontuários
+              </button>
+              <button className="btn btn-outline btn-sm" onClick={() => importFileRef.current?.click()}>
+                📤 Importar prontuários
+              </button>
+              <input ref={importFileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportFile} />
+            </>
+          )}
+          {hasRole('admin', 'veterinario') && (
+            <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Prontuário</button>
+          )}
+        </div>
       </div>
+
+      {/* Modal: Fichas para preenchimento manual */}
+      {showFichasModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 28, width: 480, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: 'var(--shadow-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ fontWeight: 700, fontSize: '1rem', margin: 0 }}>Fichas para Preenchimento Manual</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => { setShowFichasModal(false); setFichasTab('imprimir'); setFichasWa({ petId: '', tipo: null, msg: '' }) }}><X size={18} /></button>
+            </div>
+
+            {/* Tab switcher */}
+            <div style={{ display: 'flex', gap: 6, background: 'var(--background)', borderRadius: 10, padding: 4 }}>
+              {[
+                { id: 'imprimir', label: '🖨️ Imprimir / PDF' },
+                { id: 'whatsapp', label: '📱 Enviar pelo WhatsApp' },
+              ].map(t => (
+                <button key={t.id} onClick={() => setFichasTab(t.id)}
+                  style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+                    background: fichasTab === t.id ? 'var(--surface)' : 'transparent',
+                    color: fichasTab === t.id ? 'var(--teal)' : 'var(--text-muted)',
+                    boxShadow: fichasTab === t.id ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s' }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {fichasTab === 'imprimir' && (
+              <>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Selecione a ficha desejada. O documento será aberto em nova janela para impressão ou salvar como PDF.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {[
+                    { tipo: 'anamnese', label: '📋 Ficha de Anamnese',    desc: 'Campos gerais da consulta clínica' },
+                    { tipo: 'derma',    label: '🔬 Ficha Dermatológica',   desc: 'Anamnese derma, mapa corporal e exames' },
+                    { tipo: 'cannabis', label: '🌿 Ficha Canábica',        desc: 'Anamnese, triagem e histórico terapêutico' },
+                  ].map(({ tipo, label, desc }) => (
+                    <button key={tipo} className="btn btn-outline" style={{ justifyContent: 'flex-start', textAlign: 'left', padding: '12px 16px', gap: 12, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}
+                      onClick={() => handleOpenFicha(tipo)}>
+                      <span style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{label}</span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>{desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {fichasTab === 'whatsapp' && (() => {
+              const allPets = Array.isArray(petsLS) ? petsLS : PETS
+              const allTutores = Array.isArray(tutoresLS) ? tutoresLS : TUTORES
+              const sortedPets = [...allPets].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'pt-BR'))
+              const filteredWaPets = fichasWaSearch.trim()
+                ? sortedPets.filter(p => {
+                    const t = allTutores.find(tt => tt.id === p.tutorId)
+                    return normIncludes(p.name ?? '', fichasWaSearch) || normIncludes(t?.name ?? '', fichasWaSearch)
+                  })
+                : sortedPets
+              const waPet = allPets.find(p => p.id === fichasWa.petId)
+              const waTutor = waPet ? allTutores.find(t => t.id === waPet.tutorId) : null
+              return (
+                <>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Pet</label>
+                    <input className="form-input" placeholder="Digite o nome do pet ou tutor..."
+                      value={fichasWaSearch} onChange={e => setFichasWaSearch(e.target.value)}
+                      style={{ marginBottom: 4 }} />
+                    <select className="form-input" value={fichasWa.petId}
+                      onChange={e => {
+                        const pet = sortedPets.find(p => p.id === e.target.value)
+                        setFichasWa(s => ({ ...s, petId: e.target.value, tipo: null, msg: '' }))
+                        if (pet) setFichasWaSearch(pet.name)
+                      }}>
+                      <option value="">Selecione um pet...</option>
+                      {filteredWaPets.map(p => {
+                        const t = allTutores.find(tt => tt.id === p.tutorId)
+                        return <option key={p.id} value={p.id}>{p.name}{t ? ` — ${t.name}` : ''}</option>
+                      })}
+                    </select>
+                    {fichasWaSearch.trim() && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {filteredWaPets.length} pet{filteredWaPets.length !== 1 ? 's' : ''} encontrado{filteredWaPets.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {waTutor && (
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                        Tutor: <strong>{waTutor.name}</strong>{waTutor.phone ? ` · ${waTutor.phone}` : ''}
+                      </p>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 600 }}>Selecione a ficha:</span>
+                    {[
+                      { tipo: 'anamnese', label: '📋 Anamnese' },
+                      { tipo: 'derma',    label: '🔬 Dermatológica' },
+                      { tipo: 'cannabis', label: '🌿 Canábica' },
+                    ].map(({ tipo, label }) => (
+                      <button key={tipo} className={`btn ${fichasWa.tipo === tipo ? 'btn-primary' : 'btn-outline'}`}
+                        style={{ justifyContent: 'flex-start' }}
+                        disabled={!fichasWa.petId}
+                        onClick={() => handleGenerateFichaWa(tipo)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {fichasWa.msg && (
+                    <>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label className="form-label">Mensagem (editável)</label>
+                        <textarea className="form-textarea" rows={8}
+                          style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: '0.8rem' }}
+                          value={fichasWa.msg}
+                          onChange={e => setFichasWa(s => ({ ...s, msg: e.target.value }))} />
+                      </div>
+                      <button className="btn btn-primary" style={{ gap: 8 }}
+                        onClick={handleSendFichaWa}>
+                        📱 Enviar para {waTutor?.name ?? 'tutor'}
+                      </button>
+                    </>
+                  )}
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      )}
 
       {filterPet && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--teal-light)', borderRadius: 8, border: '1px solid var(--teal)' }}>
@@ -2242,6 +2770,152 @@ export default function ProntuarioPage({ navParams = {} }) {
           </tbody>
         </table>
       </div>
+
+      {/* Success banners */}
+      {exportSuccess !== null && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'var(--success, #22c55e)', color: '#fff', padding: '12px 24px', borderRadius: 12, fontWeight: 600, zIndex: 2000, boxShadow: 'var(--shadow-lg)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          ✅ {exportSuccess} prontuário{exportSuccess !== 1 ? 's' : ''} exportado{exportSuccess !== 1 ? 's' : ''} com sucesso — arquivo salvo em Downloads
+          <button onClick={() => setExportSuccess(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', marginLeft: 8, fontSize: '1rem' }}>✕</button>
+        </div>
+      )}
+      {importSuccess !== null && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'var(--success, #22c55e)', color: '#fff', padding: '12px 24px', borderRadius: 12, fontWeight: 600, zIndex: 2000, boxShadow: 'var(--shadow-lg)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          ✅ {importSuccess.importados} prontuário{importSuccess.importados !== 1 ? 's' : ''} importado{importSuccess.importados !== 1 ? 's' : ''} · {importSuccess.pulados} já existiam e foram pulados
+          <button onClick={() => setImportSuccess(null)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', marginLeft: 8, fontSize: '1rem' }}>✕</button>
+        </div>
+      )}
+
+      {/* Export modal */}
+      {showExportModal && (() => {
+        const allPetsEx = [...PETS, ...(Array.isArray(petsLS) ? petsLS.filter(p => !PETS.find(mp => mp.id === p.id)) : [])]
+        let filtered = [...prontuarios]
+        if (exportFiltro.tipo === 'periodo') {
+          if (exportFiltro.de) filtered = filtered.filter(p => p.date >= exportFiltro.de)
+          if (exportFiltro.ate) filtered = filtered.filter(p => p.date <= exportFiltro.ate)
+        } else if (exportFiltro.tipo === 'pet' && exportFiltro.petId) {
+          filtered = filtered.filter(p => p.petId === exportFiltro.petId)
+        } else if (exportFiltro.tipo === 'vet' && exportFiltro.vetId) {
+          filtered = filtered.filter(p => p.vetId === exportFiltro.vetId)
+        }
+        const petsCount = new Set(filtered.map(p => p.petId)).size
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 28, width: 500, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: 'var(--shadow-lg)', maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 style={{ fontWeight: 700, fontSize: '1rem', margin: 0 }}>📥 Exportar Prontuários</h3>
+                <button className="btn btn-ghost btn-icon" onClick={() => { setShowExportModal(false); setExportConfirmed(false) }}><X size={18} /></button>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Filtrar por</label>
+                <select className="form-select" value={exportFiltro.tipo} onChange={e => setExportFiltro(f => ({ ...f, tipo: e.target.value, de: '', ate: '', petId: '', vetId: '' }))}>
+                  <option value="todos">Todos os prontuários</option>
+                  <option value="periodo">Período</option>
+                  <option value="pet">Pet específico</option>
+                  <option value="vet">Veterinário</option>
+                </select>
+              </div>
+
+              {exportFiltro.tipo === 'periodo' && (
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
+                    <label className="form-label">De</label>
+                    <input className="form-input" type="date" value={exportFiltro.de} onChange={e => setExportFiltro(f => ({ ...f, de: e.target.value }))} />
+                  </div>
+                  <div className="form-group" style={{ flex: 1, margin: 0 }}>
+                    <label className="form-label">Até</label>
+                    <input className="form-input" type="date" value={exportFiltro.ate} onChange={e => setExportFiltro(f => ({ ...f, ate: e.target.value }))} />
+                  </div>
+                </div>
+              )}
+
+              {exportFiltro.tipo === 'pet' && (
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Pet</label>
+                  <select className="form-select" value={exportFiltro.petId} onChange={e => setExportFiltro(f => ({ ...f, petId: e.target.value }))}>
+                    <option value="">Selecione...</option>
+                    {[...allPetsEx].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'pt-BR')).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {exportFiltro.tipo === 'vet' && (
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Veterinário</label>
+                  <select className="form-select" value={exportFiltro.vetId} onChange={e => setExportFiltro(f => ({ ...f, vetId: e.target.value }))}>
+                    <option value="">Selecione...</option>
+                    {getVeterinarios().map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div style={{ background: 'var(--background)', borderRadius: 10, padding: '10px 14px', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                <strong style={{ color: 'var(--text)' }}>{filtered.length}</strong> prontuário{filtered.length !== 1 ? 's' : ''} de <strong style={{ color: 'var(--text)' }}>{petsCount}</strong> pet{petsCount !== 1 ? 's' : ''} serão exportados
+              </div>
+
+              <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: 10, padding: '10px 14px', fontSize: '0.8125rem', color: '#713f12' }}>
+                <strong>⚠️ Aviso LGPD:</strong> O arquivo exportado contém dados pessoais de tutores e histórico clínico dos animais. Guarde com segurança, não compartilhe com terceiros não autorizados e mantenha em conformidade com a Lei Geral de Proteção de Dados (Lei 13.709/2018).
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', fontSize: '0.875rem' }}>
+                <input type="checkbox" checked={exportConfirmed} onChange={e => setExportConfirmed(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
+                Declaro que estou ciente das responsabilidades sobre o tratamento dos dados exportados conforme a LGPD.
+              </label>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button className="btn btn-outline" onClick={() => { setShowExportModal(false); setExportConfirmed(false) }}>Cancelar</button>
+                <button className="btn btn-primary" disabled={!exportConfirmed || filtered.length === 0} onClick={() => exportarProntuarios(filtered)}>
+                  📥 Exportar {filtered.length > 0 ? `(${filtered.length})` : ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Import modal */}
+      {showImportModal && importData && (() => {
+        const prots = importData.prontuarios ?? []
+        const petsCount = new Set(prots.map(p => p.paciente?.id).filter(Boolean)).size
+        const existingIds = new Set(prontuarios.map(p => p.id))
+        const novos = prots.filter(p => !existingIds.has(p.id)).length
+        const existentes = prots.length - novos
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 28, width: 480, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: 'var(--shadow-lg)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 style={{ fontWeight: 700, fontSize: '1rem', margin: 0 }}>📤 Importar Prontuários</h3>
+                <button className="btn btn-ghost btn-icon" onClick={() => { setShowImportModal(false); setImportData(null) }}><X size={18} /></button>
+              </div>
+
+              <div style={{ background: 'var(--background)', borderRadius: 10, padding: '10px 14px', fontSize: '0.875rem' }}>
+                <div><strong>{prots.length}</strong> prontuário{prots.length !== 1 ? 's' : ''} encontrado{prots.length !== 1 ? 's' : ''} de <strong>{petsCount}</strong> pet{petsCount !== 1 ? 's' : ''} diferentes</div>
+                <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+                  Exportado em {importData.exportInfo?.dataExportacao ? new Date(importData.exportInfo.dataExportacao).toLocaleString('pt-BR') : '—'} · {novos} novo{novos !== 1 ? 's' : ''} · {existentes} já existente{existentes !== 1 ? 's' : ''}
+                </div>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Modo de importação</label>
+                <select className="form-select" value={importMode} onChange={e => setImportMode(e.target.value)}>
+                  <option value="novos">Apenas novos (pular existentes)</option>
+                  <option value="tudo">Importar tudo (adicionar duplicados)</option>
+                  <option value="sobrescrever">Sobrescrever existentes</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button className="btn btn-outline" onClick={() => { setShowImportModal(false); setImportData(null) }}>Cancelar</button>
+                <button className="btn btn-primary" onClick={confirmarImportacao}>📤 Importar</button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <ConfirmModal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)}
         onConfirm={() => { setProntuarios(prev => prev.filter(p => p.id !== deleteTarget.id)); setDeleteTarget(null) }}
@@ -3132,7 +3806,7 @@ function MedInput({ value, onChange, onSelect, disabled }) {
 const DOSE_OPTIONS = ['Única', '1ª dose', '2ª dose', '3ª dose', 'Reforço anual']
 const VIA_OPTIONS  = ['SC', 'Intranasal', 'VO']
 
-function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly }) {
+function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly, onApplyProtocol }) {
   const [protocols] = usePersistentState('petvet-vac-protocols', [])
   const [applications] = usePersistentState('petvet-vac-applications', [])
   const [whatsappVac, setWhatsappVac] = useState(null)
@@ -3168,6 +3842,23 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
       const r = arr[i]
       const proto = allProtocols.find(p => p.name === r.vacina)
       arr[i].proximoReforco = calcNextBooster(r.dataAplicacao, proto)
+      if (key === 'vacina') {
+        if (proto) {
+          arr[i].protocoloId = proto.id
+          arr[i].protocoloNome = proto.name
+          arr[i].precoProtocolo = proto.precoTotal ?? 0
+          arr[i].itensProtocolo = [
+            ...(proto.vacinas ?? []).map(v => ({ tipo: 'vacina', ...v })),
+            ...(proto.medicamentos ?? []).map(m => ({ tipo: 'medicamento', ...m })),
+            ...(proto.servicos ?? []).map(s => ({ tipo: 'servico', ...s })),
+          ]
+        } else {
+          delete arr[i].protocoloId
+          delete arr[i].protocoloNome
+          delete arr[i].precoProtocolo
+          delete arr[i].itensProtocolo
+        }
+      }
     }
     onChange(arr)
   }
@@ -3215,7 +3906,8 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '12px 0' }}>Nenhuma vacina aplicada nesta consulta.</p>
         )}
         {vacinasAplicadas.map((row, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 8, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <div key={i}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 4, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Vacina</label>
               <select className="form-select" value={row.vacina} onChange={e => updateRow(i, 'vacina', e.target.value)} disabled={isReadOnly}>
@@ -3266,6 +3958,58 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
             {!isReadOnly && (
               <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', alignSelf: 'center', marginTop: 18 }} onClick={() => removeRow(i)}><X size={14} /></button>
             )}
+          </div>
+          {(() => {
+            const proto = allProtocols.find(p => p.name === row.vacina)
+            if (!proto || (!proto.vacinas?.length && !proto.medicamentos?.length && !proto.servicos?.length)) return null
+            return (
+              <div style={{ background: 'var(--teal-light)', borderRadius: '0 0 8px 8px', border: '1px solid var(--teal)', borderTop: 'none', padding: '10px 14px', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <p style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--teal-dark)', margin: 0 }}>📋 Itens inclusos neste protocolo:</p>
+                  {!isReadOnly && onApplyProtocol && (
+                    <button className="btn btn-outline btn-sm"
+                      style={{ fontSize: '0.75rem', borderColor: 'var(--teal)', color: 'var(--teal)' }}
+                      onClick={() => onApplyProtocol(proto)}>
+                      ✅ Aplicar protocolo completo
+                    </button>
+                  )}
+                </div>
+                {proto.vacinas?.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <p style={{ fontWeight: 600, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 3, margin: 0 }}>💉 Vacinas/Produtos</p>
+                    {proto.vacinas.map((v, vi) => (
+                      <div key={vi} style={{ fontSize: '0.78rem', padding: '2px 8px', color: 'var(--text-primary)' }}>
+                        {v.nome} × {v.qtd ?? 1} — R$ {(Number(v.precoUnit) || 0).toFixed(2)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {proto.medicamentos?.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <p style={{ fontWeight: 600, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 3, margin: 0 }}>💊 Medicamentos</p>
+                    {proto.medicamentos.map((m, mi) => (
+                      <div key={mi} style={{ fontSize: '0.78rem', padding: '2px 8px', color: 'var(--text-primary)' }}>
+                        {m.nome} × {m.qtd ?? 1} — R$ {(Number(m.precoUnit) || 0).toFixed(2)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {proto.servicos?.length > 0 && (
+                  <div style={{ marginBottom: 6 }}>
+                    <p style={{ fontWeight: 600, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 3, margin: 0 }}>🩺 Serviços</p>
+                    {proto.servicos.map((s, si) => (
+                      <div key={si} style={{ fontSize: '0.78rem', padding: '2px 8px', color: 'var(--text-primary)' }}>
+                        {s.nome} × {s.qtd ?? 1} — R$ {(Number(s.precoUnit) || 0).toFixed(2)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--teal)', borderTop: '1px solid rgba(0,150,130,0.3)', paddingTop: 6, marginTop: 4 }}>
+                  Total do protocolo: R$ {(Number(proto.precoTotal) || 0).toFixed(2)}
+                </div>
+              </div>
+            )
+          })()}
           </div>
         ))}
       </div>
@@ -3335,6 +4079,151 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
               <button className="btn btn-primary" onClick={() => { navigator.clipboard?.writeText(`Olá! Passando para lembrar que ${whatsappVac.petName ?? 'seu pet'} tem o reforço da vacina *${whatsappVac.proto?.name}* previsto para *${new Date(whatsappVac.nextDate + 'T00:00').toLocaleDateString('pt-BR')}*.\n\nAgende sua consulta com antecedência! 🐾\n\n— Equipe PetVet`); setWhatsappVac(null) }}>Copiar e fechar</button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---- Cirurgia Section ----
+function CirurgiaSection({ procedimentos, mesmoVet, vetUnicoId, vets, isReadOnly, onChange, onMesmoVetChange, onVetUnicoChange }) {
+  const [catalogo] = usePersistentState('petvet-catalogo', [])
+
+  const cirurgias = catalogo.filter(s =>
+    s.category === 'Cirurgia' ||
+    normIncludes(s.name, 'cirurgia') ||
+    normIncludes(s.name, 'orquiectomia') ||
+    normIncludes(s.name, 'ovariohisterectomia') ||
+    normIncludes(s.name, 'castra')
+  )
+  const displayCirurgias = cirurgias.length > 0 ? cirurgias : catalogo
+
+  const EMPTY_PROC = { servicoId: '', nome: '', vetId: '', vetNome: '', preco: 0 }
+
+  function addProc() { onChange([...procedimentos, { ...EMPTY_PROC }]) }
+  function removeProc(i) { onChange(procedimentos.filter((_, idx) => idx !== i)) }
+  function updateProc(i, key, val) {
+    const arr = [...procedimentos]
+    arr[i] = { ...arr[i], [key]: val }
+    onChange(arr)
+  }
+  function selectServico(i, servicoId) {
+    const svc = catalogo.find(s => (s.id ?? s.name) === servicoId)
+    const arr = [...procedimentos]
+    arr[i] = { ...arr[i], servicoId, nome: servicoId === '__outro' ? '' : (svc?.name ?? ''), preco: servicoId === '__outro' ? 0 : (Number(svc?.price) || 0) }
+    onChange(arr)
+  }
+  function selectVet(i, vetId) {
+    const vet = vets.find(v => v.id === vetId)
+    const arr = [...procedimentos]
+    arr[i] = { ...arr[i], vetId, vetNome: vet?.name ?? '' }
+    onChange(arr)
+  }
+
+  const totalPreco = procedimentos.reduce((s, p) => s + (Number(p.preco) || 0), 0)
+  const vetsEnvolvidos = [...new Set(procedimentos.map(p => p.vetNome).filter(Boolean))]
+  const showIndivVet = !mesmoVet || procedimentos.length <= 1
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <h4 style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', margin: 0 }}>Procedimentos Cirúrgicos</h4>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '2px 0 0' }}>Registre os procedimentos realizados nesta cirurgia</p>
+        </div>
+        {!isReadOnly && (
+          <button className="btn btn-outline btn-sm" onClick={addProc}><Plus size={14} /> Adicionar procedimento</button>
+        )}
+      </div>
+
+      {!isReadOnly && procedimentos.length > 1 && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <input type="checkbox" checked={mesmoVet} onChange={e => onMesmoVetChange(e.target.checked)} style={{ accentColor: 'var(--teal)', width: 15, height: 15 }} />
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Mesmo veterinário para todos os procedimentos</span>
+        </label>
+      )}
+
+      {mesmoVet && procedimentos.length > 1 && (
+        <div className="form-group">
+          <label className="form-label">Veterinário responsável (todos os procedimentos)</label>
+          <select className="form-select" value={vetUnicoId}
+            onChange={e => {
+              const vet = vets.find(v => v.id === e.target.value)
+              onVetUnicoChange(e.target.value, vet?.name ?? '')
+            }}
+            disabled={isReadOnly}>
+            <option value="">Selecione o veterinário</option>
+            {vets.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </div>
+      )}
+
+      {procedimentos.length === 0 && (
+        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', padding: '12px 0' }}>
+          Nenhum procedimento adicionado. Clique em "+ Adicionar procedimento" para começar.
+        </p>
+      )}
+
+      {procedimentos.map((proc, i) => (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: showIndivVet ? '1fr 1fr auto auto' : '1fr auto auto', gap: 8, alignItems: 'end', padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label" style={{ fontSize: '0.75rem' }}>Procedimento / Cirurgia</label>
+            <select className="form-select" value={proc.servicoId} onChange={e => selectServico(i, e.target.value)} disabled={isReadOnly}>
+              <option value="">Selecione...</option>
+              {displayCirurgias.map(s => (
+                <option key={s.id ?? s.name} value={s.id ?? s.name}>
+                  {s.name}{s.category && s.category !== 'Cirurgia' ? ` (${s.category})` : ''}
+                </option>
+              ))}
+              <option value="__outro">Outro (informar manualmente)</option>
+            </select>
+            {proc.servicoId === '__outro' && (
+              <input className="form-input" style={{ marginTop: 4 }} value={proc.nome}
+                onChange={e => updateProc(i, 'nome', e.target.value)}
+                placeholder="Nome do procedimento" disabled={isReadOnly} />
+            )}
+          </div>
+
+          {showIndivVet && (
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label" style={{ fontSize: '0.75rem' }}>Veterinário responsável</label>
+              <select className="form-select" value={proc.vetId} onChange={e => selectVet(i, e.target.value)} disabled={isReadOnly}>
+                <option value="">Selecione...</option>
+                {vets.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div className="form-group" style={{ margin: 0, minWidth: 110 }}>
+            <label className="form-label" style={{ fontSize: '0.75rem' }}>Preço R$</label>
+            <input type="number" min="0" step="0.01" className="form-input"
+              value={proc.preco} onChange={e => updateProc(i, 'preco', e.target.value)}
+              disabled={isReadOnly} placeholder="0,00" />
+          </div>
+
+          {!isReadOnly && (
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', alignSelf: 'center', marginTop: 18 }} onClick={() => removeProc(i)}>
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      ))}
+
+      {procedimentos.length > 0 && (
+        <div style={{ background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>Total de procedimentos</span>
+            <span style={{ fontWeight: 700 }}>{procedimentos.length}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9375rem', borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Valor total</span>
+            <span style={{ fontWeight: 800, color: 'var(--teal)' }}>R$ {totalPreco.toFixed(2)}</span>
+          </div>
+          {vetsEnvolvidos.length > 0 && (
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+              Veterinários: {vetsEnvolvidos.join(', ')}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -3913,11 +4802,11 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo, requestM
                 </div>
                 <div className="form-group">
                   <label className="form-label">RG</label>
-                  <input className="form-input" value={termoData.tutorRGRecusa} onChange={e => setTermoData(d => ({ ...d, tutorRGRecusa: e.target.value }))} placeholder="00.000.000-0" />
+                  <input className="form-input" value={termoData.tutorRGRecusa} onChange={e => setTermoData(d => ({ ...d, tutorRGRecusa: maskRG(e.target.value) }))} placeholder="00.000.000-0" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">CPF</label>
-                  <input className="form-input" value={termoData.tutorCPFRecusa} onChange={e => setTermoData(d => ({ ...d, tutorCPFRecusa: e.target.value }))} placeholder="000.000.000-00" />
+                  <input className="form-input" value={termoData.tutorCPFRecusa} onChange={e => setTermoData(d => ({ ...d, tutorCPFRecusa: maskCPF(e.target.value) }))} placeholder="000.000.000-00" />
                 </div>
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Endereço</label>
@@ -3925,7 +4814,7 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo, requestM
                 </div>
                 <div className="form-group">
                   <label className="form-label">Telefone</label>
-                  <input className="form-input" value={termoData.tutorTelRecusa} onChange={e => setTermoData(d => ({ ...d, tutorTelRecusa: e.target.value }))} placeholder="(11) 99999-9999" />
+                  <input className="form-input" value={termoData.tutorTelRecusa} onChange={e => setTermoData(d => ({ ...d, tutorTelRecusa: maskPhone(e.target.value) }))} placeholder="(11) 99999-9999" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Veterinário ou Clínica</label>
@@ -3945,11 +4834,11 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo, requestM
                 </div>
                 <div className="form-group">
                   <label className="form-label">CPF</label>
-                  <input className="form-input" value={termoData.tutorCPFDerma} onChange={e => setTermoData(d => ({ ...d, tutorCPFDerma: e.target.value }))} placeholder="000.000.000-00" />
+                  <input className="form-input" value={termoData.tutorCPFDerma} onChange={e => setTermoData(d => ({ ...d, tutorCPFDerma: maskCPF(e.target.value) }))} placeholder="000.000.000-00" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Telefone</label>
-                  <input className="form-input" value={termoData.tutorTelDerma} onChange={e => setTermoData(d => ({ ...d, tutorTelDerma: e.target.value }))} placeholder="(11) 99999-9999" />
+                  <input className="form-input" value={termoData.tutorTelDerma} onChange={e => setTermoData(d => ({ ...d, tutorTelDerma: maskPhone(e.target.value) }))} placeholder="(11) 99999-9999" />
                 </div>
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Endereço</label>
@@ -3970,11 +4859,11 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo, requestM
                 </div>
                 <div className="form-group">
                   <label className="form-label">CPF</label>
-                  <input className="form-input" value={termoData.tutorCPFCanabis} onChange={e => setTermoData(d => ({ ...d, tutorCPFCanabis: e.target.value }))} placeholder="000.000.000-00" />
+                  <input className="form-input" value={termoData.tutorCPFCanabis} onChange={e => setTermoData(d => ({ ...d, tutorCPFCanabis: maskCPF(e.target.value) }))} placeholder="000.000.000-00" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Telefone</label>
-                  <input className="form-input" value={termoData.tutorTelCanabis} onChange={e => setTermoData(d => ({ ...d, tutorTelCanabis: e.target.value }))} placeholder="(11) 99999-9999" />
+                  <input className="form-input" value={termoData.tutorTelCanabis} onChange={e => setTermoData(d => ({ ...d, tutorTelCanabis: maskPhone(e.target.value) }))} placeholder="(11) 99999-9999" />
                 </div>
                 <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Endereço</label>
