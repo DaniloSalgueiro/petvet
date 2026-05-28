@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+const { createClient } = require('@supabase/supabase-js')
 
-export default async (_req, _context) => {
+exports.handler = async (event, context) => {
   try {
     const supabase = createClient(
       process.env.VITE_SUPABASE_URL,
@@ -11,30 +11,38 @@ export default async (_req, _context) => {
       .from('app_state')
       .select('value')
       .eq('key', 'petvet-identidade')
-      .maybeSingle()
+      .single()
 
-    const id = data?.value || {}
-    const icone = id.iconePWA || id.iconeApp || id.logoP
+    const identidade = data?.value || {}
+    const icone = identidade.iconePWA || identidade.iconeApp || identidade.logoP
 
-    if (typeof icone === 'string' && icone.startsWith('data:image')) {
-      const [header, base64Data] = icone.split(',')
-      const mimeType = header.split(';')[0].split(':')[1]
-      const buffer = Buffer.from(base64Data, 'base64')
+    if (icone && icone.startsWith('data:image')) {
+      const mimeType   = icone.split(';')[0].split(':')[1]
+      const base64Data = icone.split(',')[1]
+      const buffer     = Buffer.from(base64Data, 'base64')
 
-      return new Response(buffer, {
+      return {
+        statusCode: 200,
         headers: {
           'Content-Type': mimeType,
           'Cache-Control': 'public, max-age=3600',
           'Access-Control-Allow-Origin': '*',
         },
-      })
+        body: buffer.toString('base64'),
+        isBase64Encoded: true,
+      }
     }
-  } catch {}
 
-  return new Response(null, {
-    status: 302,
-    headers: { Location: '/icon.svg' },
-  })
+    return {
+      statusCode: 302,
+      headers: { Location: '/icon.svg' },
+      body: '',
+    }
+  } catch (err) {
+    return {
+      statusCode: 302,
+      headers: { Location: '/icon.svg' },
+      body: '',
+    }
+  }
 }
-
-export const config = { path: '/app-icon' }
