@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { loadAll } from './hooks/useSupabaseSync'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { IdentidadeProvider } from './context/IdentidadeContext'
@@ -110,6 +111,13 @@ function PageRouter({ page, navParams, navigateTo }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    // Pré-popula o localStorage com todos os dados do Supabase numa única query.
+    // Os hooks useCloudState fazem suas próprias buscas individuais em paralelo,
+    // mas este loadAll garante que navegações subsequentes iniciam com dados atuais.
+    loadAll()
+  }, [])
+
   return (
     <IdentidadeProvider>
       <ThemeProvider>

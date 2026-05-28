@@ -25,6 +25,35 @@ const SYNC_KEYS = [
 ]
 
 /**
+ * Busca TODAS as chaves de uma vez do Supabase e atualiza o localStorage.
+ * Uma única query em vez de N queries individuais.
+ * @returns {{ [key: string]: any }} mapa com os valores encontrados
+ */
+export async function loadAll() {
+  try {
+    const { data, error } = await supabase
+      .from('app_state')
+      .select('key, value')
+      .in('key', SYNC_KEYS)
+
+    if (error) throw error
+    if (!data || data.length === 0) return {}
+
+    const result = {}
+    for (const row of data) {
+      result[row.key] = row.value
+      try { localStorage.setItem(row.key, JSON.stringify(row.value)) } catch {}
+    }
+
+    console.log(`[PetVet] loadAll: ${data.length}/${SYNC_KEYS.length} chaves carregadas do Supabase`)
+    return result
+  } catch (e) {
+    console.warn('[PetVet] loadAll erro:', e.message)
+    return {}
+  }
+}
+
+/**
  * Upsert de uma chave/valor no Supabase (tabela app_state).
  * @param {string} key  - chave do localStorage
  * @param {any}    data - valor já parseado (armazenado como JSONB)

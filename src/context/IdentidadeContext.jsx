@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { loadFromSupabase, syncToSupabase } from '../hooks/useSupabaseSync'
 
 export const DEFAULT_IDENTIDADE = {
   nomeP: 'Emporium Vazpet',
@@ -38,10 +39,22 @@ export function IdentidadeProvider({ children }) {
     document.title = identidade.nomeP
   }, [identidade.nomeP])
 
+  // Busca do Supabase na montagem — sincroniza logos e cores de outros dispositivos
+  useEffect(() => {
+    loadFromSupabase(STORAGE_KEY).then(result => {
+      if (result.ok && result.data && typeof result.data === 'object' && !Array.isArray(result.data)) {
+        const merged = { ...DEFAULT_IDENTIDADE, ...result.data }
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)) } catch {}
+        setIdState(merged)
+      }
+    }).catch(() => {})
+  }, [])
+
   function setIdentidade(updater) {
     setIdState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : { ...prev, ...updater }
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)) } catch {}
+      syncToSupabase(STORAGE_KEY, next)
       return next
     })
   }
@@ -49,6 +62,7 @@ export function IdentidadeProvider({ children }) {
   function resetIdentidade() {
     setIdState({ ...DEFAULT_IDENTIDADE })
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
+    syncToSupabase(STORAGE_KEY, DEFAULT_IDENTIDADE)
   }
 
   return (

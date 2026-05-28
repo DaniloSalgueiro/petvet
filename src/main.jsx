@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import './styles/global.css'
 import './styles/layout.css'
-import { migrateLocalStorageToSupabase, syncAll } from './hooks/useSupabaseSync'
+import { migrateLocalStorageToSupabase, syncAll, loadAll } from './hooks/useSupabaseSync'
 
 // Expõe funções de migração no console do browser para execução manual
 // Uso: await migrateLocalStorageToSupabase()   (migração única com proteção contra repetição)
@@ -11,6 +11,7 @@ import { migrateLocalStorageToSupabase, syncAll } from './hooks/useSupabaseSync'
 if (typeof window !== 'undefined') {
   window.migrateLocalStorageToSupabase = migrateLocalStorageToSupabase
   window.syncAll = syncAll
+  window.loadAll = loadAll
 }
 
 if ('serviceWorker' in navigator) {
