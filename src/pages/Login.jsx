@@ -27,9 +27,13 @@ export default function Login() {
     try {
       const saved = localStorage.getItem('petvet-credentials')
       if (saved) {
-        const { email: savedEmail, password: savedPassword } = JSON.parse(saved)
-        setEmail(savedEmail)
-        setPassword(savedPassword)
+        const parsed = JSON.parse(saved)
+        if (parsed.email) setEmail(parsed.email)
+        // senha nunca é restaurada — campo sempre inicia vazio
+        if (parsed.password) {
+          // migra credenciais antigas: remove senha salva
+          localStorage.setItem('petvet-credentials', JSON.stringify({ email: parsed.email }))
+        }
         setRememberMe(true)
       }
     } catch {}
@@ -39,7 +43,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
     if (rememberMe) {
-      localStorage.setItem('petvet-credentials', JSON.stringify({ email, password }))
+      localStorage.setItem('petvet-credentials', JSON.stringify({ email }))
     } else {
       localStorage.removeItem('petvet-credentials')
     }
@@ -104,7 +108,7 @@ export default function Login() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              autoComplete="current-password"
+              autoComplete="new-password"
             />
           </div>
 

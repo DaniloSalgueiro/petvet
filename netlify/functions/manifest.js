@@ -29,7 +29,8 @@ export default async (_req, _context) => {
     const nome      = id.nomeCompleto  || id.nomeP || 'PetVet'
     const shortName = id.nomeAbreviado || 'PetVet'
     const theme     = id.corPrimaria   || '#27B5AC'
-    const hasLogo   = typeof id.logoP === 'string' && id.logoP.startsWith('data:image')
+    const iconSrc   = id.iconePWA || id.logoP
+    const hasLogo   = typeof iconSrc === 'string' && iconSrc.startsWith('data:image')
 
     const manifest = {
       ...FALLBACK,

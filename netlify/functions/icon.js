@@ -13,7 +13,7 @@ export default async (_req, _context) => {
       .eq('key', 'petvet-identidade')
       .maybeSingle()
 
-    const logo = data?.value?.logoP
+    const logo = data?.value?.iconePWA || data?.value?.logoP
 
     if (typeof logo === 'string' && logo.startsWith('data:image')) {
       const [header, base64] = logo.split(',')

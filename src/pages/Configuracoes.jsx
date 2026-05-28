@@ -359,7 +359,7 @@ export default function ConfiguracoesPage() {
       <div className="card" style={{ padding: '20px' }}>
         <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: 4 }}>Logos</p>
         <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 16 }}>
-          Usadas na sidebar, tela de login e documentos impressos
+          Usadas na sidebar, tela de login e documentos impressos. Independentes do ícone do app.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px' }}>
           {[
@@ -464,15 +464,27 @@ export default function ConfiguracoesPage() {
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Ícone do app</label>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 8 }}>
-              Usado como ícone quando instalado na tela inicial. Recomendado: imagem quadrada.
+              Exclusivo para o ícone na tela inicial do celular. Independente das logos do sistema.
+              {!draft.iconePWA && draft.logoP && (
+                <span style={{ color: 'var(--teal-dark)', fontStyle: 'italic' }}> (usando logo principal como fallback)</span>
+              )}
             </p>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              {draft.logoP ? (
+              {draft.iconePWA ? (
                 <img
-                  src={draft.logoP}
+                  src={draft.iconePWA}
                   alt="Ícone do app"
                   style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 12, border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface-2)' }}
                 />
+              ) : draft.logoP ? (
+                <div style={{ position: 'relative', flexShrink: 0 }}>
+                  <img
+                    src={draft.logoP}
+                    alt="Fallback: logo principal"
+                    style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 12, border: `2px dashed ${draft.corPrimaria}`, background: 'var(--surface-2)', opacity: 0.6 }}
+                  />
+                  <span style={{ position: 'absolute', bottom: -6, left: 0, right: 0, textAlign: 'center', fontSize: '0.6rem', color: 'var(--text-muted)' }}>fallback</span>
+                </div>
               ) : (
                 <div style={{ width: 64, height: 64, borderRadius: 12, background: `${draft.corPrimaria}22`, border: `2px dashed ${draft.corPrimaria}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', flexShrink: 0 }}>
                   📱
@@ -480,16 +492,16 @@ export default function ConfiguracoesPage() {
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <PhotoUploadButtons
-                  onFile={file => handleLogoFile('logoP', file)}
-                  hasPhoto={!!draft.logoP}
+                  onFile={file => handleLogoFile('iconePWA', file)}
+                  hasPhoto={!!draft.iconePWA}
                   label="ícone"
                 />
-                {draft.logoP && (
+                {draft.iconePWA && (
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--danger)' }}
-                    onClick={() => set('logoP', null)}
+                    onClick={() => set('iconePWA', null)}
                   >
                     Remover ícone
                   </button>
