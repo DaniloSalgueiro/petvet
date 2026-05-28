@@ -1,11 +1,27 @@
 [build]
   command = "npm install && npx vite build"
   publish = "dist"
+  functions = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "20"
   CI = "false"
 
+# Manifest dinâmico — deve vir antes do catch-all /*
+[[redirects]]
+  from = "/manifest.json"
+  to = "/.netlify/functions/manifest"
+  status = 200
+  force = true
+
+# Ícone dinâmico (logo da clínica)
+[[redirects]]
+  from = "/app-icon"
+  to = "/.netlify/functions/icon"
+  status = 200
+  force = true
+
+# SPA fallback — todas as rotas para index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"

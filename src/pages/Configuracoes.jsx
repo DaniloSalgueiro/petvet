@@ -84,6 +84,7 @@ export default function ConfiguracoesPage() {
   const [cropField, setCropField] = useState(null)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [savedMsg, setSavedMsg] = useState(false)
+  const [pwaSavedMsg, setPwaSavedMsg] = useState(false)
   const [followupCfg, setFollowupCfg] = useState(loadFollowupConfig)
   const [followupSaved, setFollowupSaved] = useState(false)
   const [followupTab, setFollowupTab] = useState('config')
@@ -146,7 +147,9 @@ export default function ConfiguracoesPage() {
   function handleSave() {
     setIdentidade({ ...draft })
     setSavedMsg(true)
+    setPwaSavedMsg(true)
     setTimeout(() => setSavedMsg(false), 2500)
+    setTimeout(() => setPwaSavedMsg(false), 6000)
   }
 
   function handleReset() {
@@ -387,6 +390,54 @@ export default function ConfiguracoesPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* App PWA */}
+      <div className="card" style={{ padding: '20px' }}>
+        <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: 4 }}>
+          Configurações do App (PWA)
+        </p>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 16 }}>
+          Aparece quando o app é instalado na tela inicial do celular
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px' }}>
+          <div className="form-group">
+            <label className="form-label">Nome completo do app</label>
+            <input
+              className="form-input"
+              value={draft.nomeCompleto ?? draft.nomeP ?? ''}
+              onChange={e => set('nomeCompleto', e.target.value)}
+              placeholder="Ex: Emporium Vazpet + Tatá Bichos"
+            />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Exibido ao instalar e nas configurações do celular</span>
+          </div>
+          <div className="form-group">
+            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Nome abreviado
+              <span style={{ fontSize: '0.72rem', fontWeight: 400, color: (draft.nomeAbreviado?.length ?? 0) > 10 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                ({draft.nomeAbreviado?.length ?? 0}/12)
+              </span>
+            </label>
+            <input
+              className="form-input"
+              value={draft.nomeAbreviado ?? ''}
+              onChange={e => set('nomeAbreviado', e.target.value.slice(0, 12))}
+              placeholder="Ex: PetVet"
+              maxLength={12}
+            />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aparece embaixo do ícone na tela inicial</span>
+          </div>
+        </div>
+        <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--teal-light)', borderRadius: 8, borderLeft: '3px solid var(--teal)' }}>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--teal-dark)', margin: 0 }}>
+            A cor do tema do app usa a <strong>cor primária</strong> configurada abaixo. O ícone usa a <strong>logo principal</strong> cadastrada acima.
+          </p>
+        </div>
+        {pwaSavedMsg && (
+          <div style={{ marginTop: 12, padding: '10px 14px', background: '#e6f4ea', borderRadius: 8, borderLeft: '3px solid var(--success)', fontSize: '0.8125rem', color: '#276749' }}>
+            ✅ Alterações salvas! Usuários verão as mudanças na próxima vez que abrirem o app.
+          </div>
+        )}
       </div>
 
       {/* Cores */}
