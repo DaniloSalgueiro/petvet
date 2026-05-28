@@ -246,45 +246,113 @@ CREATE TABLE IF NOT EXISTS followup_queue (
 
 -- ============================================================
 -- RLS — Row Level Security
--- Política permissiva para anon e authenticated (ajuste conforme necessário)
+-- Acesso público total (restrinja para authenticated após configurar Supabase Auth)
 -- ============================================================
 
-ALTER TABLE app_state             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE clinica_config        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE usuarios              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tutores               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pets                  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE agendamentos          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE prontuarios           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE produtos              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE servicos_consultorio  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE servicos_domicilio    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE funcionarios          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE lancamentos           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE protocolos_vacinas    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE aplicacoes_vacinas    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE racas                 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bulario               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vendas                ENABLE ROW LEVEL SECURITY;
-ALTER TABLE followup_queue        ENABLE ROW LEVEL SECURITY;
+-- app_state
+ALTER TABLE app_state ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico app_state" ON app_state;
+CREATE POLICY "Acesso publico app_state" ON app_state
+  FOR ALL USING (true) WITH CHECK (true);
 
--- Política permissiva (anon + authenticated)
-DO $$
-DECLARE
-  tbl text;
-  tables text[] := ARRAY[
-    'app_state','clinica_config','usuarios','tutores','pets',
-    'agendamentos','prontuarios','produtos','servicos_consultorio',
-    'servicos_domicilio','funcionarios','lancamentos','protocolos_vacinas',
-    'aplicacoes_vacinas','racas','bulario','vendas','followup_queue'
-  ];
-BEGIN
-  FOREACH tbl IN ARRAY tables LOOP
-    EXECUTE format(
-      'CREATE POLICY IF NOT EXISTS "Acesso publico %s" ON %I
-       FOR ALL USING (auth.role() = ''authenticated'' OR auth.role() = ''anon'')
-       WITH CHECK (auth.role() = ''authenticated'' OR auth.role() = ''anon'')',
-      tbl, tbl
-    );
-  END LOOP;
-END $$;
+-- clinica_config
+ALTER TABLE clinica_config ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico clinica_config" ON clinica_config;
+CREATE POLICY "Acesso publico clinica_config" ON clinica_config
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- usuarios
+ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico usuarios" ON usuarios;
+CREATE POLICY "Acesso publico usuarios" ON usuarios
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- tutores
+ALTER TABLE tutores ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico tutores" ON tutores;
+CREATE POLICY "Acesso publico tutores" ON tutores
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- pets
+ALTER TABLE pets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico pets" ON pets;
+CREATE POLICY "Acesso publico pets" ON pets
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- agendamentos
+ALTER TABLE agendamentos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico agendamentos" ON agendamentos;
+CREATE POLICY "Acesso publico agendamentos" ON agendamentos
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- prontuarios
+ALTER TABLE prontuarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico prontuarios" ON prontuarios;
+CREATE POLICY "Acesso publico prontuarios" ON prontuarios
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- produtos
+ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico produtos" ON produtos;
+CREATE POLICY "Acesso publico produtos" ON produtos
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- servicos_consultorio
+ALTER TABLE servicos_consultorio ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico servicos_consultorio" ON servicos_consultorio;
+CREATE POLICY "Acesso publico servicos_consultorio" ON servicos_consultorio
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- servicos_domicilio
+ALTER TABLE servicos_domicilio ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico servicos_domicilio" ON servicos_domicilio;
+CREATE POLICY "Acesso publico servicos_domicilio" ON servicos_domicilio
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- funcionarios
+ALTER TABLE funcionarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico funcionarios" ON funcionarios;
+CREATE POLICY "Acesso publico funcionarios" ON funcionarios
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- lancamentos
+ALTER TABLE lancamentos ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico lancamentos" ON lancamentos;
+CREATE POLICY "Acesso publico lancamentos" ON lancamentos
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- protocolos_vacinas
+ALTER TABLE protocolos_vacinas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico protocolos_vacinas" ON protocolos_vacinas;
+CREATE POLICY "Acesso publico protocolos_vacinas" ON protocolos_vacinas
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- aplicacoes_vacinas
+ALTER TABLE aplicacoes_vacinas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico aplicacoes_vacinas" ON aplicacoes_vacinas;
+CREATE POLICY "Acesso publico aplicacoes_vacinas" ON aplicacoes_vacinas
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- racas
+ALTER TABLE racas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico racas" ON racas;
+CREATE POLICY "Acesso publico racas" ON racas
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- bulario
+ALTER TABLE bulario ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico bulario" ON bulario;
+CREATE POLICY "Acesso publico bulario" ON bulario
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- vendas
+ALTER TABLE vendas ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico vendas" ON vendas;
+CREATE POLICY "Acesso publico vendas" ON vendas
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- followup_queue
+ALTER TABLE followup_queue ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso publico followup_queue" ON followup_queue;
+CREATE POLICY "Acesso publico followup_queue" ON followup_queue
+  FOR ALL USING (true) WITH CHECK (true);

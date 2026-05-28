@@ -25,9 +25,9 @@ const SYNC_KEYS = [
 ]
 
 /**
- * Upsert de uma chave/valor no Supabase (tabela app_state)
- * @param {string} key - chave do localStorage
- * @param {any} data - valor a salvar (será armazenado como JSONB)
+ * Upsert de uma chave/valor no Supabase (tabela app_state).
+ * @param {string} key  - chave do localStorage
+ * @param {any}    data - valor já parseado (armazenado como JSONB)
  */
 export async function syncToSupabase(key, data) {
   try {
@@ -46,7 +46,7 @@ export async function syncToSupabase(key, data) {
 }
 
 /**
- * Busca o valor de uma chave no Supabase
+ * Busca o valor de uma chave no Supabase.
  * @param {string} key - chave do localStorage
  */
 export async function loadFromSupabase(key) {
@@ -66,36 +66,83 @@ export async function loadFromSupabase(key) {
 
 /**
  * Sincroniza TODOS os dados do localStorage para o Supabase.
- * Chamado na migração inicial ou para forçar re-sync.
+ * Pode ser chamado manualmente ou pela migração inicial.
+ * @returns {{ sucesso: number, erro: number, detalhes: Array }}
  */
 export async function syncAll() {
-  const results = []
+  console.group('[PetVet] syncAll — iniciando sync do localStorage → Supabase')
+  console.log('Chaves a sincronizar:', SYNC_KEYS)
+
+  const detalhes = []
+  let sucesso = 0
+  let erro = 0
+
   for (const key of SYNC_KEYS) {
-    try {
-      const raw = localStorage.getItem(key)
-      if (raw === null) continue
-      const value = JSON.parse(raw)
-      const result = await syncToSupabase(key, value)
-      results.push({ key, ...result })
-    } catch (e) {
-      results.push({ key, ok: false, error: e.message })
+    const raw = localStorage.getItem(key)
+    if (raw === null) {
+      console.log(`  ⏭  ${key} — não encontrada no localStorage, pulando`)
+      continue
     }
+
+    let value
+    try {
+      value = JSON.parse(raw)
+    } catch (e) {
+      console.warn(`  ✗  ${key} — JSON inválido:`, e.message)
+      detalhes.push({ key, ok: false, error: `JSON inválido: ${e.message}` })
+      erro++
+      continue
+    }
+
+    const tamanho = Array.isArray(value) ? `${value.length} itens` : typeof value
+    console.log(`  ↑  ${key} (${tamanho}) — enviando...`)
+
+    const result = await syncToSupabase(key, value)
+    if (result.ok) {
+      console.log(`  ✓  ${key} — salvo`)
+      sucesso++
+    } else {
+      console.warn(`  ✗  ${key} — erro:`, result.error)
+      erro++
+    }
+    detalhes.push({ key, ...result })
   }
-  return results
+
+  console.log(`\n[PetVet] syncAll concluído — sucesso: ${sucesso}, erro: ${erro}`)
+  console.groupEnd()
+
+  return { sucesso, erro, detalhes }
 }
 
 /**
  * Migração única do localStorage para o Supabase.
  * Verifica flag 'petvet-migrated' para não repetir.
+ * Exposto em window.migrateLocalStorageToSupabase() para uso no console do browser.
+ *
+ * Para forçar re-migração: localStorage.removeItem('petvet-migrated')
+ *
+ * @returns {{ skipped: boolean, sucesso?: number, erro?: number, detalhes?: Array }}
  */
 export async function migrateLocalStorageToSupabase() {
   if (localStorage.getItem('petvet-migrated') === 'true') {
+    console.warn('[PetVet] Migração já realizada. Para repetir: localStorage.removeItem("petvet-migrated")')
     return { skipped: true, reason: 'Migração já realizada anteriormente.' }
   }
-  const results = await syncAll()
-  const ok = results.every(r => r.ok)
-  if (ok) {
+
+  console.log('[PetVet] Iniciando migração localStorage → Supabase...')
+  console.time('[PetVet] Migração total')
+
+  const { sucesso, erro, detalhes } = await syncAll()
+
+  console.timeEnd('[PetVet] Migração total')
+
+  if (erro === 0) {
     localStorage.setItem('petvet-migrated', 'true')
+    console.log('[PetVet] ✅ Migração concluída com sucesso! Flag petvet-migrated definida.')
+  } else {
+    console.warn(`[PetVet] ⚠️  Migração concluída com ${erro} erro(s). Flag NÃO definida — corrija e tente novamente.`)
+    console.table(detalhes.filter(d => !d.ok))
   }
-  return { skipped: false, results, ok }
+
+  return { skipped: false, sucesso, erro, detalhes }
 }
