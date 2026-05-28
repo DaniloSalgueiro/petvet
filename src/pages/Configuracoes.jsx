@@ -3,6 +3,7 @@ import { RotateCcw, Save, MessageCircle, History, Settings2, Trash2, Lock, Unloc
 import SSLogo from '../components/SSLogo'
 import { useIdentidade, DEFAULT_IDENTIDADE } from '../context/IdentidadeContext'
 import { DEFAULT_FOLLOWUP_CONFIG } from '../context/FollowupContext'
+import { syncToSupabase } from '../hooks/useSupabaseSync'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import ConfirmModal from '../components/ui/ConfirmModal'
@@ -147,8 +148,14 @@ export default function ConfiguracoesPage() {
   function handleSave() {
     setIdentidade({ ...draft })
     setSavedMsg(true)
-    setPwaSavedMsg(true)
     setTimeout(() => setSavedMsg(false), 2500)
+  }
+
+  async function handleSavePWA() {
+    const updated = { ...draft }
+    setIdentidade(updated)
+    await syncToSupabase('petvet-identidade', updated)
+    setPwaSavedMsg(true)
     setTimeout(() => setPwaSavedMsg(false), 6000)
   }
 
@@ -395,49 +402,114 @@ export default function ConfiguracoesPage() {
       {/* App PWA */}
       <div className="card" style={{ padding: '20px' }}>
         <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: 4 }}>
-          Configurações do App (PWA)
+          📱 Configurações do App (PWA)
         </p>
         <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 16 }}>
           Aparece quando o app é instalado na tela inicial do celular
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px' }}>
-          <div className="form-group">
-            <label className="form-label">Nome completo do app</label>
-            <input
-              className="form-input"
-              value={draft.nomeCompleto ?? draft.nomeP ?? ''}
-              onChange={e => set('nomeCompleto', e.target.value)}
-              placeholder="Ex: Emporium Vazpet + Tatá Bichos"
-            />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Exibido ao instalar e nas configurações do celular</span>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* Nomes */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 20px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Nome completo do app</label>
+              <input
+                className="form-input"
+                value={draft.nomeCompleto ?? draft.nomeP ?? ''}
+                onChange={e => set('nomeCompleto', e.target.value)}
+                placeholder="Ex: Emporium Vazpet + Tatá Bichos"
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Exibido ao instalar e nas configurações do celular</span>
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                Nome abreviado
+                <span style={{ fontSize: '0.72rem', fontWeight: 400, color: (draft.nomeAbreviado?.length ?? 0) > 10 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                  ({draft.nomeAbreviado?.length ?? 0}/12)
+                </span>
+              </label>
+              <input
+                className="form-input"
+                value={draft.nomeAbreviado ?? ''}
+                onChange={e => set('nomeAbreviado', e.target.value.slice(0, 12))}
+                placeholder="Ex: PetVet"
+                maxLength={12}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aparece embaixo do ícone na tela inicial</span>
+            </div>
           </div>
-          <div className="form-group">
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              Nome abreviado
-              <span style={{ fontSize: '0.72rem', fontWeight: 400, color: (draft.nomeAbreviado?.length ?? 0) > 10 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                ({draft.nomeAbreviado?.length ?? 0}/12)
+
+          {/* Cor do tema */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Cor do tema</label>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="color"
+                value={draft.corPrimaria}
+                onChange={e => set('corPrimaria', e.target.value)}
+                style={{ width: 44, height: 44, border: '1.5px solid var(--border)', borderRadius: 6, cursor: 'pointer', padding: 3, flexShrink: 0 }}
+              />
+              <input
+                className="form-input"
+                value={draft.corPrimaria}
+                onChange={e => set('corPrimaria', e.target.value)}
+                placeholder="#27B5AC"
+                style={{ fontFamily: 'monospace', maxWidth: 140 }}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aparece na barra de status do celular quando o app está aberto</span>
+            </div>
+          </div>
+
+          {/* Ícone do app */}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">Ícone do app</label>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 8 }}>
+              Usado como ícone quando instalado na tela inicial. Recomendado: imagem quadrada.
+            </p>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              {draft.logoP ? (
+                <img
+                  src={draft.logoP}
+                  alt="Ícone do app"
+                  style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 12, border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface-2)' }}
+                />
+              ) : (
+                <div style={{ width: 64, height: 64, borderRadius: 12, background: `${draft.corPrimaria}22`, border: `2px dashed ${draft.corPrimaria}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.75rem', flexShrink: 0 }}>
+                  📱
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <PhotoUploadButtons
+                  onFile={file => handleLogoFile('logoP', file)}
+                  hasPhoto={!!draft.logoP}
+                  label="ícone"
+                />
+                {draft.logoP && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--danger)' }}
+                    onClick={() => set('logoP', null)}
+                  >
+                    Remover ícone
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Botão salvar dedicado */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+            {pwaSavedMsg && (
+              <span style={{ fontSize: '0.8125rem', color: '#276749' }}>
+                ✅ Salvo! O ícone será atualizado na próxima abertura do app.
               </span>
-            </label>
-            <input
-              className="form-input"
-              value={draft.nomeAbreviado ?? ''}
-              onChange={e => set('nomeAbreviado', e.target.value.slice(0, 12))}
-              placeholder="Ex: PetVet"
-              maxLength={12}
-            />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Aparece embaixo do ícone na tela inicial</span>
+            )}
+            <button className="btn btn-primary btn-sm" onClick={handleSavePWA}>
+              <Save size={14} /> Salvar e sincronizar
+            </button>
           </div>
         </div>
-        <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--teal-light)', borderRadius: 8, borderLeft: '3px solid var(--teal)' }}>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--teal-dark)', margin: 0 }}>
-            A cor do tema do app usa a <strong>cor primária</strong> configurada abaixo. O ícone usa a <strong>logo principal</strong> cadastrada acima.
-          </p>
-        </div>
-        {pwaSavedMsg && (
-          <div style={{ marginTop: 12, padding: '10px 14px', background: '#e6f4ea', borderRadius: 8, borderLeft: '3px solid var(--success)', fontSize: '0.8125rem', color: '#276749' }}>
-            ✅ Alterações salvas! Usuários verão as mudanças na próxima vez que abrirem o app.
-          </div>
-        )}
       </div>
 
       {/* Cores */}
