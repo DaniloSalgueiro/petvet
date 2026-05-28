@@ -4,6 +4,8 @@ import SSLogo from '../components/SSLogo'
 import { useIdentidade, DEFAULT_IDENTIDADE } from '../context/IdentidadeContext'
 import { DEFAULT_FOLLOWUP_CONFIG } from '../context/FollowupContext'
 import { syncToSupabase } from '../hooks/useSupabaseSync'
+import { uploadIconePWA } from '../lib/supabase'
+import { injectManifest } from '../lib/pwa'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import ConfirmModal from '../components/ui/ConfirmModal'
@@ -153,8 +155,19 @@ export default function ConfiguracoesPage() {
 
   async function handleSavePWA() {
     const updated = { ...draft }
+
+    if (updated.iconePWA?.startsWith('data:image')) {
+      const url = await uploadIconePWA(updated.iconePWA)
+      if (url) updated.iconePWAUrl = url
+    } else if (!updated.iconePWA) {
+      updated.iconePWAUrl = null
+    }
+
     setIdentidade(updated)
+    setDraft(updated)
     await syncToSupabase('petvet-identidade', updated)
+    injectManifest(updated)
+
     setPwaSavedMsg(true)
     setTimeout(() => setPwaSavedMsg(false), 6000)
   }
@@ -465,14 +478,14 @@ export default function ConfiguracoesPage() {
             <label className="form-label">Ícone do app</label>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 8 }}>
               Exclusivo para o ícone na tela inicial do celular. Independente das logos do sistema.
-              {!draft.iconePWA && draft.logoP && (
+              {!draft.iconePWA && !draft.iconePWAUrl && draft.logoP && (
                 <span style={{ color: 'var(--teal-dark)', fontStyle: 'italic' }}> (usando logo principal como fallback)</span>
               )}
             </p>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-              {draft.iconePWA ? (
+              {(draft.iconePWAUrl || draft.iconePWA) ? (
                 <img
-                  src={draft.iconePWA}
+                  src={draft.iconePWAUrl || draft.iconePWA}
                   alt="Ícone do app"
                   style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 12, border: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface-2)' }}
                 />
@@ -496,12 +509,12 @@ export default function ConfiguracoesPage() {
                   hasPhoto={!!draft.iconePWA}
                   label="ícone"
                 />
-                {draft.iconePWA && (
+                {(draft.iconePWA || draft.iconePWAUrl) && (
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
                     style={{ color: 'var(--danger)' }}
-                    onClick={() => set('iconePWA', null)}
+                    onClick={() => { set('iconePWA', null); set('iconePWAUrl', null) }}
                   >
                     Remover ícone
                   </button>
@@ -514,7 +527,7 @@ export default function ConfiguracoesPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
             {pwaSavedMsg && (
               <span style={{ fontSize: '0.8125rem', color: '#276749' }}>
-                ✅ Salvo! O ícone será atualizado na próxima abertura do app.
+                ✅ Salvo! Reinstale o app na tela inicial para aplicar o novo ícone.
               </span>
             )}
             <button className="btn btn-primary btn-sm" onClick={handleSavePWA}>

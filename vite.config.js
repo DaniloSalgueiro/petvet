@@ -7,18 +7,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: null,       // registro manual em src/main.jsx
-      manifest: false,            // manifest manual em public/manifest.json
-      includeAssets: ['icon.svg', 'manifest.json'],
-      workbox: {
+      injectRegister: null,
+      manifest: false,
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
-        runtimeCaching: [
-          {
-            // Supabase nunca é cacheado — sempre vai à rede
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkOnly',
-          },
-        ],
       },
     }),
   ],

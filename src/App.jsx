@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { loadAll, loadFromSupabase } from './hooks/useSupabaseSync'
+import { injectManifest } from './lib/pwa'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { IdentidadeProvider } from './context/IdentidadeContext'
@@ -118,6 +119,22 @@ const CRITICAL_KEYS = [
 ]
 
 export default function App() {
+  // Injeta manifest dinamicamente com dados do localStorage
+  useEffect(() => {
+    try {
+      const identidade = JSON.parse(localStorage.getItem('petvet-identidade') || '{}')
+      injectManifest(identidade)
+    } catch {}
+
+    const onStorage = (e) => {
+      if (e.key === 'petvet-identidade') {
+        try { injectManifest(JSON.parse(e.newValue || '{}')) } catch {}
+      }
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
   // Carga inicial: traz todos os dados do Supabase de uma vez (1 query)
   useEffect(() => {
     loadAll()
