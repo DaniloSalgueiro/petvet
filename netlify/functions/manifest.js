@@ -38,7 +38,7 @@ export default async (_req, _context) => {
       short_name: shortName,
       theme_color: theme,
       icons: hasLogo
-        ? [{ src: '/app-icon', sizes: 'any', type: 'image/png', purpose: 'any maskable' }]
+        ? [{ src: '/.netlify/functions/app-icon', sizes: 'any', type: 'image/png', purpose: 'any maskable' }]
         : FALLBACK.icons,
     }
 

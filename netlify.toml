@@ -14,10 +14,10 @@
   status = 200
   force = true
 
-# Ícone dinâmico (logo da clínica)
+# Ícone dinâmico (logo da clínica) — compatibilidade com URLs antigas
 [[redirects]]
   from = "/app-icon"
-  to = "/.netlify/functions/icon"
+  to = "/.netlify/functions/app-icon"
   status = 200
   force = true
 

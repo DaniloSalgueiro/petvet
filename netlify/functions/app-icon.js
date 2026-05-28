@@ -13,25 +13,28 @@ export default async (_req, _context) => {
       .eq('key', 'petvet-identidade')
       .maybeSingle()
 
-    const logo = data?.value?.iconePWA || data?.value?.logoP
+    const id = data?.value || {}
+    const icone = id.iconePWA || id.iconeApp || id.logoP
 
-    if (typeof logo === 'string' && logo.startsWith('data:image')) {
-      const [header, base64] = logo.split(',')
+    if (typeof icone === 'string' && icone.startsWith('data:image')) {
+      const [header, base64Data] = icone.split(',')
       const mimeType = header.split(';')[0].split(':')[1]
-      const buffer = Buffer.from(base64, 'base64')
+      const buffer = Buffer.from(base64Data, 'base64')
 
       return new Response(buffer, {
         headers: {
           'Content-Type': mimeType,
           'Cache-Control': 'public, max-age=3600',
+          'Access-Control-Allow-Origin': '*',
         },
       })
     }
   } catch {}
 
-  // Fallback: redireciona para o SVG estático
   return new Response(null, {
     status: 302,
     headers: { Location: '/icon.svg' },
   })
 }
+
+export const config = { path: '/app-icon' }
