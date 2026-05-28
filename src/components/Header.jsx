@@ -3,6 +3,7 @@ import { Sun, Moon, Bell, X, MessageCircle } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useFollowup } from '../context/FollowupContext'
 import { useAuth } from '../context/AuthContext'
+import InstallPWA from './InstallPWA'
 
 const PAGE_TITLES = {
   dashboard:  'Dashboard',
@@ -44,6 +45,8 @@ export default function Header({ currentPage, actions }) {
 
       <div className="header-actions">
         {actions}
+
+        <InstallPWA />
 
         <div style={{ position: 'relative' }} ref={panelRef}>
           <button
