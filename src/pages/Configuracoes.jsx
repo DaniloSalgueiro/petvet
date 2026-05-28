@@ -31,7 +31,7 @@ const SS_CONFIG_KEY      = 'petvet-ss-config'
 const DEV_CONFIG_KEY     = 'petvet-dev-config'
 const DEV_UNLOCKED_KEY   = 'petvet-dev-unlocked-at'
 const DEV_TIMEOUT_MS     = 30 * 60 * 1000
-const DEFAULT_DEV_HASH   = btoa('SS@2026dev')
+const DEFAULT_DEV_HASH   = btoa('SS@2024dev')
 
 function loadSsConfig() {
   const defaults = {
