@@ -507,6 +507,209 @@ input, textarea, select, button {
 }
 
 /* =========================================================
+   PRONTUÁRIO — Responsividade Mobile
+   ========================================================= */
+
+/* BATCH 1 — Tabs: ocultar scrollbar webkit */
+.tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* BATCH 2/3/5/6 — Grids de formulário responsivos */
+
+/* 3-col → 1-col em mobile */
+@media (max-width: 480px) {
+  .form-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .form-grid > * {
+    grid-column: auto !important;
+  }
+
+  /* 2-col → 1-col */
+  .form-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+  .form-grid-2 > * {
+    grid-column: auto !important;
+  }
+
+  /* Grid fixo (220px 1fr) → 1-col */
+  .form-grid-fixed {
+    grid-template-columns: 1fr !important;
+  }
+  .form-grid-fixed > * {
+    grid-column: auto !important;
+  }
+
+  /* BATCH 3 — Seletor de espécie em coluna */
+  .prontuario-species-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  /* BATCH 5 — Checkboxes/chips: touch target mínimo */
+  .prontuario-form-card button[type="button"] {
+    min-height: 36px;
+  }
+
+  /* BATCH 7 — Botões de navegação full-width */
+  .prontuario-section-nav {
+    gap: 10px !important;
+    padding: 10px 12px !important;
+  }
+  .prontuario-section-nav .btn {
+    flex: 1 !important;
+    justify-content: center !important;
+  }
+
+  /* BATCH 8 — Prescrição: grid de medicamento → 1 coluna */
+  .prontuario-med-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .prontuario-med-grid > * {
+    grid-column: auto !important;
+  }
+
+  /* BATCH 9 — Termos: modal responsivo */
+  .termo-modal-inner {
+    max-width: 95vw !important;
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+  /* Grids 1fr 1fr dentro do modal de termos → 1 col */
+  .termo-modal-inner [style*="1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+  .termo-modal-inner h3 {
+    font-size: 0.9rem !important;
+  }
+  .termo-modal-inner .form-input,
+  .termo-modal-inner .form-select,
+  .termo-modal-inner .form-textarea {
+    font-size: 16px !important;
+  }
+  .termo-modal-btns {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .termo-modal-btns .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+
+  /* BATCH 10 — Seção content: padding reduzido */
+  .prontuario-content-area {
+    padding: 14px !important;
+  }
+
+  /* BATCH 10 — Form header: botões empilhados */
+  .prontuario-form-header-btns {
+    width: 100%;
+  }
+  .prontuario-form-header-btns .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* font-size mínimo 16px para evitar zoom iOS */
+  .form-input,
+  .form-select,
+  .form-textarea {
+    font-size: 16px !important;
+  }
+
+  /* Lesão/exames checkbox grid: 2 colunas */
+  .prontuario-lesao-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* BATCH 1 — Vacinas: card vertical empilhado */
+  .prontuario-vac-row {
+    grid-template-columns: 1fr !important;
+    position: relative;
+  }
+  .prontuario-vac-row > * {
+    grid-column: auto !important;
+  }
+  .prontuario-vac-row .form-input,
+  .prontuario-vac-row .form-select {
+    font-size: 16px !important;
+  }
+  /* Botão remover posicionado no canto superior direito do card */
+  .prontuario-vac-remove {
+    position: absolute !important;
+    top: 6px !important;
+    right: 6px !important;
+    margin-top: 0 !important;
+    align-self: auto !important;
+  }
+
+  /* BATCH 1 — Aplicações: card vertical */
+  .prontuario-aplic-row {
+    grid-template-columns: 1fr !important;
+  }
+  .prontuario-aplic-row > * {
+    grid-column: auto !important;
+  }
+  .prontuario-aplic-row .form-input,
+  .prontuario-aplic-row .form-select {
+    font-size: 16px !important;
+  }
+  .prontuario-aplic-actions {
+    display: flex !important;
+    gap: 8px;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: 4px;
+  }
+  .prontuario-aplic-actions .btn {
+    margin-top: 0 !important;
+    flex: 0 0 auto;
+  }
+
+  /* BATCH 1 — Header add buttons full-width */
+  .prontuario-section-header {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .prontuario-section-header > .btn {
+    width: 100% !important;
+    justify-content: center !important;
+  }
+}
+
+/* Em todos mobile (até 768px) */
+@media (max-width: 768px) {
+  /* Abas com scroll suave no touch */
+  .tabs-scroll {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  /* Sombra lateral indicando scroll disponível */
+  .tabs-scroll::after {
+    content: '';
+    position: sticky;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    min-width: 24px;
+    background: linear-gradient(to right, transparent, var(--surface));
+    pointer-events: none;
+    flex-shrink: 0;
+  }
+
+  /* Prontuário: cada aba com padding menor */
+  .tabs-scroll button {
+    padding: 10px 12px !important;
+    font-size: 0.8125rem !important;
+  }
+}
+
+/* =========================================================
    SALGUEIRO SYSTEMS — brand text
    ========================================================= */
 .ss-brand-text {

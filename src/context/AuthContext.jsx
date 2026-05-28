@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 import { USUARIOS } from '../data/mock'
 
 const AuthContext = createContext(null)
@@ -36,7 +37,6 @@ function savePasswordMap(map) {
 }
 
 function initializeAuthStorage() {
-  // Garante que usuários do mock estão no storage, EXCETO os explicitamente deletados
   try {
     const storedRaw = localStorage.getItem('petvet-usuarios')
     if (storedRaw) {
@@ -44,7 +44,6 @@ function initializeAuthStorage() {
       if (!Array.isArray(stored)) throw new Error('invalid')
       const storedById = Object.fromEntries(stored.map(u => [u.id, u]))
       const deletedIds = getDeletedIds()
-      // Apenas reinsere mock users que não foram deletados e estão faltando
       const activeMockUsers = USUARIOS.filter(u => !deletedIds.has(u.id))
       const missingMockUser = activeMockUsers.some(u => !storedById[u.id])
       if (missingMockUser) {
@@ -56,19 +55,16 @@ function initializeAuthStorage() {
     localStorage.removeItem('petvet-usuarios')
   }
 
-  // Garante que todos os usuários têm uma entrada válida no mapa de senhas
   const users = getStoredUsers()
   const map = getPasswordMap()
   const validIds = new Set(users.map(u => u.id))
   let changed = false
-
   for (const u of users) {
     if (!map[u.id] || typeof map[u.id].password !== 'string') {
       map[u.id] = { password: DEFAULT_PASSWORD, firstLogin: u.firstLogin !== false }
       changed = true
     }
   }
-  // Remove entradas órfãs de usuários que não existem mais
   for (const id of Object.keys(map)) {
     if (!validIds.has(id)) { delete map[id]; changed = true }
   }
@@ -84,13 +80,55 @@ function getSessionUser() {
   } catch { return null }
 }
 
+function saveSession(user) {
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(user)) } catch {}
+}
+
+function clearSession() {
+  try { sessionStorage.removeItem(SESSION_KEY) } catch {}
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => getSessionUser())
   const [mustChangePassword, setMustChangePassword] = useState(false)
 
-  useEffect(() => { initializeAuthStorage() }, [])
+  useEffect(() => {
+    initializeAuthStorage()
 
-  function login(email, password) {
+    // Ouve mudanças de sessão do Supabase (ex: expiração, logout externo)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setUser(null)
+        setMustChangePassword(false)
+        clearSession()
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // ── Login: tenta Supabase Auth primeiro, cai no localStorage se falhar ──────
+  async function login(email, password) {
+    // Tentativa 1: Supabase Auth
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (!error && data.user) {
+        const users = getStoredUsers()
+        const found = users.find(u => u.email?.toLowerCase() === email.toLowerCase())
+        if (found && found.active !== false) {
+          setUser(found)
+          setMustChangePassword(false)
+          saveSession(found)
+          return true
+        }
+      }
+    } catch {}
+
+    // Tentativa 2: autenticação local (usuários ainda não migrados para o Supabase Auth)
+    return loginLegacy(email, password)
+  }
+
+  function loginLegacy(email, password) {
     const users = getStoredUsers()
     const found = users.find(u => u.email.toLowerCase() === email.toLowerCase())
     if (!found || found.active === false) return false
@@ -104,19 +142,21 @@ export function AuthProvider({ children }) {
 
     if (password !== storedPwd) return false
 
-    const sessionUser = { ...found }
-    setUser(sessionUser)
+    setUser(found)
     setMustChangePassword(isFirst)
-    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser)) } catch {}
+    saveSession(found)
     return true
   }
 
-  function logout() {
+  // ── Logout ─────────────────────────────────────────────────────────────────
+  async function logout() {
     setUser(null)
     setMustChangePassword(false)
-    try { sessionStorage.removeItem(SESSION_KEY) } catch {}
+    clearSession()
+    try { await supabase.auth.signOut() } catch {}
   }
 
+  // ── Permissões ─────────────────────────────────────────────────────────────
   function hasRole(...roles) {
     return user && roles.includes(user.role)
   }
@@ -131,12 +171,16 @@ export function AuthProvider({ children }) {
     return false
   }
 
-  function changePassword(newPassword) {
+  // ── Troca de senha ─────────────────────────────────────────────────────────
+  async function changePassword(newPassword) {
     if (!user) return
+    // Atualiza no mapa local (compatibilidade legacy)
     const map = getPasswordMap()
     map[user.id] = { password: newPassword, firstLogin: false }
     savePasswordMap(map)
     setMustChangePassword(false)
+    // Atualiza no Supabase Auth se a sessão for do Supabase
+    try { await supabase.auth.updateUser({ password: newPassword }) } catch {}
   }
 
   function resetPassword(userId) {

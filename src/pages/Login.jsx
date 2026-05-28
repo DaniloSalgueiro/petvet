@@ -35,7 +35,7 @@ export default function Login() {
     } catch {}
   }, [])
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     if (rememberMe) {
@@ -43,7 +43,7 @@ export default function Login() {
     } else {
       localStorage.removeItem('petvet-credentials')
     }
-    const ok = login(email, password)
+    const ok = await login(email, password)
     if (!ok) setError('E-mail ou senha inválidos.')
   }
 

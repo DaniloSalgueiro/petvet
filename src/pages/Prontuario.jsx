@@ -621,7 +621,7 @@ function DermaCanvas({ value, onChange, disabled }) {
     <div>
       {/* Toolbar */}
       {!disabled && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button type="button"
             className={`btn btn-sm ${tool === 'brush' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setTool('brush')}>
@@ -994,7 +994,7 @@ export default function ProntuarioPage({ navParams = {} }) {
               {petInfo && <p className="page-subtitle">{petInfo.name} · {tutorInfo?.name}</p>}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div className="prontuario-form-header-btns" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {selectedPr && (
               <button className="btn btn-outline btn-sm" onClick={handlePrintProntuario}>
                 <Printer size={14} /> Imprimir Prontuário
@@ -1014,7 +1014,7 @@ export default function ProntuarioPage({ navParams = {} }) {
 
         {/* Dados básicos */}
         <div className="card">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
+          <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
             <div className="form-group">
               <label className="form-label">Pet *</label>
               {(() => {
@@ -1081,7 +1081,7 @@ export default function ProntuarioPage({ navParams = {} }) {
           <div style={{ padding: '0 22px' }} className="no-print">
             <Tabs tabs={visibleSections} active={activeSection} onChange={setActiveSection} />
           </div>
-          <div style={{ padding: '22px' }}>
+          <div className="prontuario-content-area" style={{ padding: '22px' }}>
 
             {/* TIPO */}
             {activeSection === 'tipo' && (
@@ -1153,7 +1153,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                   <textarea className="form-textarea" value={form.anamnese.historicoPrevio} onChange={e => updateAnamnese('historicoPrevio', e.target.value)} disabled={isReadOnly}
                     placeholder="Cirurgias, doenças anteriores, medicamentos contínuos..." style={{ resize: 'none', overflowY: 'auto', maxHeight: 120, minHeight: 64 }} />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
+                <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
                   <SelectField label="Status vacinal" value={form.anamnese.statusVacinal} onChange={v => updateAnamnese('statusVacinal', v)} ro={isReadOnly} options={['Em dia', 'Atrasada', 'Desconhecida']} />
                   <SelectField label="Acesso à rua" value={form.anamnese.acesRua} onChange={v => updateAnamnese('acesRua', v)} ro={isReadOnly} options={['Sim', 'Não', 'Restrito']} />
                   <SelectField label="Contato com outros animais" value={form.anamnese.contatoAnimais} onChange={v => updateAnamnese('contatoAnimais', v)} ro={isReadOnly} options={['Sim', 'Não', 'Eventualmente']} />
@@ -1270,7 +1270,7 @@ export default function ProntuarioPage({ navParams = {} }) {
 
                   {/* SEÇÃO 1 — Anamnese Dermatológica */}
                   {sectionTitle('Seção 1 — Anamnese Dermatológica')}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
+                  <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                       <label className="form-label">Queixa principal / Tempo de evolução *</label>
                       <textarea className="form-textarea" value={dVal('queixa')} onChange={e => dUpd('queixa', e.target.value)} disabled={isReadOnly} placeholder="Motivo da consulta e tempo de evolução" style={taStyle} />
@@ -1455,7 +1455,7 @@ export default function ProntuarioPage({ navParams = {} }) {
 
                   {/* SEÇÃO 4 — Tipos de lesão */}
                   {sectionTitle('Seção 4 — Tipos de Lesão')}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                  <div className="form-grid prontuario-lesao-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
                     {LESAO_TYPES.map(lesao => {
                       const sel = dArr('tiposLesao').includes(lesao)
                       return (
@@ -1473,7 +1473,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                   {sectionTitle('Seção 5 — Exames Complementares Realizados')}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {/* Raspado */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '8px 16px', alignItems: 'start' }}>
+                    <div className="form-grid-fixed" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '8px 16px', alignItems: 'start' }}>
                       <div>
                         <p className="form-label" style={{ marginBottom: 6 }}>Raspado Cutâneo</p>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -1563,7 +1563,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                       </div>
                     </div>
                     {/* Cultura/Antibiograma */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '8px 16px', alignItems: 'start' }}>
+                    <div className="form-grid-fixed" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: '8px 16px', alignItems: 'start' }}>
                       <div>
                         <p className="form-label" style={{ marginBottom: 6 }}>Cultura / Antibiograma</p>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -1628,7 +1628,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
 
                   {sectionTitle('Anamnese Canábica')}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
+                  <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                       <label className="form-label">Queixa principal / Tempo de evolução *</label>
                       <textarea className="form-textarea" value={cVal('queixa')} onChange={e => cUpd('queixa', e.target.value)} disabled={isReadOnly} placeholder="Motivo da consulta e tempo de evolução" style={taStyle} />
@@ -1761,8 +1761,8 @@ export default function ProntuarioPage({ navParams = {} }) {
                       { label: 'Falta de Apetite / Náusea', key: 'triaApetite', freqKey: null },
                     ].map(({ label, key, freqKey }) => (
                       <div key={key}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--surface-2)', borderRadius: 8 }}>
-                          <span style={{ flex: 1, fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--surface-2)', borderRadius: 8, flexWrap: 'wrap' }}>
+                          <span style={{ flex: 1, minWidth: 120, fontSize: '0.8125rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</span>
                           <div style={{ display: 'flex', gap: 10 }}>
                             {[0,1,2,3,4,5].map(n => (
                               <label key={n} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, cursor: isReadOnly ? 'default' : 'pointer', minWidth: 24 }}>
@@ -1816,7 +1816,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                   <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                     O ambiente molda o tônus endocanabinoide do paciente.
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 20px' }}>
+                  <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px 20px' }}>
                     <div className="form-group">
                       <label className="form-label">Nível de estresse ambiental na casa:</label>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -1851,7 +1851,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                     <textarea className="form-textarea" value={cVal('expectativasTutor')} onChange={e => cUpd('expectativasTutor', e.target.value)} disabled={isReadOnly} placeholder="Ex: ganho de mobilidade, redução de crises, desmame de alopáticos" style={taStyle} />
                   </div>
                   {sectionTitle('Protocolo Canábico')}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
+                  <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                       <label className="form-label">Indicação clínica</label>
                       <textarea className="form-textarea" value={cVal('indicacao')} onChange={e => cUpd('indicacao', e.target.value)} disabled={isReadOnly} placeholder="Ex: Dor crônica, ansiedade, epilepsia refratária, suporte oncológico..." style={taStyle} />
@@ -1915,7 +1915,7 @@ export default function ProntuarioPage({ navParams = {} }) {
             {activeSection === 'vitais' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Seletor de espécie */}
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8 }}>
+                <div className="prontuario-species-row" style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', marginRight: 8 }}>Espécie do paciente:</span>
                   {['Cão', 'Gato', 'Outros'].map(sp => (
                     <label key={sp} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: isReadOnly ? 'default' : 'pointer', fontSize: '0.875rem' }}>
@@ -1927,7 +1927,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                   ))}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
+                <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
                   <VitalField label="Temperatura (°C)" value={form.vitals.temperatura} onChange={v => updateVitals('temperatura', v)} ro={isReadOnly} placeholder="38.0 – 39.4"
                     classification={classifyTemp(form.vitals.temperatura)} />
                   <VitalField label={`FC — bpm${especie === 'Cão' ? ' (60-120)' : especie === 'Gato' ? ' (140-220)' : ''}`} value={form.vitals.fc} onChange={v => updateVitals('fc', v)} ro={isReadOnly}
@@ -2105,23 +2105,24 @@ export default function ProntuarioPage({ navParams = {} }) {
                 vacinasAplicadas={form.vacinasAplicadas ?? []}
                 onChange={arr => setForm(f => ({ ...f, vacinasAplicadas: arr }))}
                 isReadOnly={isReadOnly}
-                onApplyProtocol={proto => {
-                  if (proto.medicamentos?.length > 0) {
-                    const today = new Date().toISOString().split('T')[0]
-                    setForm(f => ({
-                      ...f,
-                      aplicacoes: [
-                        ...(f.aplicacoes ?? []),
-                        ...proto.medicamentos.map(m => ({
+                onProtocolChange={(oldProtoId, newProto) => {
+                  const today = new Date().toISOString().split('T')[0]
+                  setForm(f => {
+                    const withoutOld = oldProtoId
+                      ? (f.aplicacoes ?? []).filter(a => a._protocoloId !== oldProtoId)
+                      : (f.aplicacoes ?? [])
+                    const newItems = newProto?.medicamentos?.length > 0
+                      ? newProto.medicamentos.map(m => ({
                           nome: m.nome || '',
                           dose: '',
                           via: 'SC',
                           dataAplicacao: today,
-                          obs: `Protocolo: ${proto.name}`,
-                        })),
-                      ],
-                    }))
-                  }
+                          obs: `Protocolo: ${newProto.name}`,
+                          _protocoloId: newProto.id,
+                        }))
+                      : []
+                    return { ...f, aplicacoes: [...withoutOld, ...newItems] }
+                  })
                 }}
               />
             )}
@@ -2215,7 +2216,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                 <datalist id="dl-freq">{['1x ao dia', '2x ao dia', '3x ao dia', '8 em 8h', '12 em 12h', '24 em 24h', 'A cada 48h', 'Uso contínuo', 'Se necessário', 'Uso único'].map(v => <option key={v} value={v} />)}</datalist>
                 {form.prescricao.medicamentos.map((med, idx) => (
                   <div key={idx} style={{ padding: '14px', background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--border)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '10px 14px' }}>
+                    <div className="prontuario-med-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '10px 14px' }}>
                       <div className="form-group" style={{ position: 'relative' }}>
                         <label className="form-label">Medicamento</label>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -2345,7 +2346,7 @@ export default function ProntuarioPage({ navParams = {} }) {
           </div>
 
           {/* Navegação entre seções */}
-          <div className="no-print prontuario-section-nav" style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 22px', borderTop: '1px solid var(--border)' }}>
+          <div className="no-print prontuario-section-nav" style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 22px', borderTop: '1px solid var(--border)', gap: 8 }}>
             <button className="btn btn-ghost" disabled={sectionIdx === 0} onClick={() => setActiveSection(visibleSections[sectionIdx - 1].id)}>← Anterior</button>
             {sectionIdx < visibleSections.length - 1
               ? <button className="btn btn-primary" onClick={() => setActiveSection(visibleSections[sectionIdx + 1].id)}>Próxima →</button>
@@ -3806,7 +3807,7 @@ function MedInput({ value, onChange, onSelect, disabled }) {
 const DOSE_OPTIONS = ['Única', '1ª dose', '2ª dose', '3ª dose', 'Reforço anual']
 const VIA_OPTIONS  = ['SC', 'Intranasal', 'VO']
 
-function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly, onApplyProtocol }) {
+function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly, onProtocolChange }) {
   const [protocols] = usePersistentState('petvet-vac-protocols', [])
   const [applications] = usePersistentState('petvet-vac-applications', [])
   const [whatsappVac, setWhatsappVac] = useState(null)
@@ -3834,9 +3835,14 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
   }
 
   function addRow() { onChange([...vacinasAplicadas, emptyRow()]) }
-  function removeRow(i) { onChange(vacinasAplicadas.filter((_, idx) => idx !== i)) }
+  function removeRow(i) {
+    const removedProtoId = vacinasAplicadas[i]?.protocoloId ?? null
+    if (removedProtoId) onProtocolChange?.(removedProtoId, null)
+    onChange(vacinasAplicadas.filter((_, idx) => idx !== i))
+  }
   function updateRow(i, key, val) {
     const arr = [...vacinasAplicadas]
+    const oldProtoId = key === 'vacina' ? (arr[i].protocoloId ?? null) : null
     arr[i] = { ...arr[i], [key]: val }
     if (key === 'dataAplicacao' || key === 'vacina') {
       const r = arr[i]
@@ -3858,6 +3864,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
           delete arr[i].precoProtocolo
           delete arr[i].itensProtocolo
         }
+        onProtocolChange?.(oldProtoId, proto ?? null)
       }
     }
     onChange(arr)
@@ -3898,7 +3905,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
 
       {/* Vacinas aplicadas nesta consulta */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div className="prontuario-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h4 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>Vacinas aplicadas nesta consulta</h4>
           {!isReadOnly && <button className="btn btn-outline btn-sm" onClick={addRow}><Plus size={14} /> Adicionar</button>}
         </div>
@@ -3907,7 +3914,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
         )}
         {vacinasAplicadas.map((row, i) => (
           <div key={i}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 4, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <div className="prontuario-vac-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 4, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Vacina</label>
               <select className="form-select" value={row.vacina} onChange={e => updateRow(i, 'vacina', e.target.value)} disabled={isReadOnly}>
@@ -3956,7 +3963,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
               </select>
             </div>
             {!isReadOnly && (
-              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', alignSelf: 'center', marginTop: 18 }} onClick={() => removeRow(i)}><X size={14} /></button>
+              <button className="btn btn-ghost btn-sm prontuario-vac-remove" style={{ color: 'var(--danger)', alignSelf: 'center', marginTop: 18 }} onClick={() => removeRow(i)}><X size={14} /></button>
             )}
           </div>
           {(() => {
@@ -3964,16 +3971,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
             if (!proto || (!proto.vacinas?.length && !proto.medicamentos?.length && !proto.servicos?.length)) return null
             return (
               <div style={{ background: 'var(--teal-light)', borderRadius: '0 0 8px 8px', border: '1px solid var(--teal)', borderTop: 'none', padding: '10px 14px', marginBottom: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <p style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--teal-dark)', margin: 0 }}>📋 Itens inclusos neste protocolo:</p>
-                  {!isReadOnly && onApplyProtocol && (
-                    <button className="btn btn-outline btn-sm"
-                      style={{ fontSize: '0.75rem', borderColor: 'var(--teal)', color: 'var(--teal)' }}
-                      onClick={() => onApplyProtocol(proto)}>
-                      ✅ Aplicar protocolo completo
-                    </button>
-                  )}
-                </div>
+                <p style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--teal-dark)', margin: '0 0 8px' }}>📋 Itens inclusos neste protocolo:</p>
                 {proto.vacinas?.length > 0 && (
                   <div style={{ marginBottom: 6 }}>
                     <p style={{ fontWeight: 600, fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 3, margin: 0 }}>💉 Vacinas/Produtos</p>
@@ -4246,7 +4244,7 @@ function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+      <div className="prontuario-section-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <h4 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>Aplicações nesta consulta</h4>
         {!isReadOnly && <button className="btn btn-outline btn-sm" onClick={addRow}><Plus size={14} /> Adicionar</button>}
       </div>
@@ -4256,7 +4254,7 @@ function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
       {aplicacoes.map((row, i) => {
         const bula = row.nome.length >= 2 ? findBula(row.nome) : null
         return (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto auto', gap: 8, alignItems: 'end', padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <div key={i} className="prontuario-aplic-row" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto auto', gap: 8, alignItems: 'end', padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)', position: 'relative' }}>
             <div className="form-group" style={{ margin: 0, position: 'relative' }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Nome</label>
               <input className="form-input" value={row.nome}
@@ -4288,17 +4286,19 @@ function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
                 {APLICACAO_VIA.map(v => <option key={v}>{v}</option>)}
               </select>
             </div>
-            <button
-              className="btn btn-ghost btn-sm"
-              title={bula ? 'Ver bula' : 'Medicamento não encontrado no bulário'}
-              disabled={!bula}
-              onClick={() => bula && setBulaMed(bula)}
-              style={{ alignSelf: 'center', marginTop: 18, fontSize: '0.875rem', opacity: bula ? 1 : 0.35 }}>
-              📖
-            </button>
-            {!isReadOnly && (
-              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', alignSelf: 'center', marginTop: 18 }} onClick={() => removeRow(i)}><X size={14} /></button>
-            )}
+            <div className="prontuario-aplic-actions">
+              <button
+                className="btn btn-ghost btn-sm"
+                title={bula ? 'Ver bula' : 'Medicamento não encontrado no bulário'}
+                disabled={!bula}
+                onClick={() => bula && setBulaMed(bula)}
+                style={{ alignSelf: 'center', marginTop: 18, fontSize: '0.875rem', opacity: bula ? 1 : 0.35 }}>
+                📖
+              </button>
+              {!isReadOnly && (
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', alignSelf: 'center', marginTop: 18 }} onClick={() => removeRow(i)}><X size={14} /></button>
+              )}
+            </div>
           </div>
         )
       })}
@@ -4616,7 +4616,7 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo, requestM
 
       {activeModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '32px 16px' }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 32, width: '100%', maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: 'var(--shadow-lg)' }}>
+          <div className="termo-modal-inner" style={{ background: 'var(--surface)', borderRadius: 16, padding: 32, width: '100%', maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: 'var(--shadow-lg)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ fontWeight: 700, fontSize: '1.05rem', margin: 0 }}>{activeTermoLabel}</h3>
               <button className="btn btn-ghost btn-sm" onClick={closeModal}><X size={16} /></button>
@@ -5194,7 +5194,7 @@ function TermosSection({ form, petInfo, tutorInfo, vetInfo, onAddAnexo, requestM
               )}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <div className="termo-modal-btns" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-ghost" onClick={closeModal}>Fechar</button>
               <button className="btn btn-primary" onClick={printModal}><Printer size={14} /> 🖨️ Imprimir para assinatura manual</button>
             </div>

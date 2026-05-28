@@ -1,6 +1,6 @@
 export default function Tabs({ tabs, active, onChange }) {
   return (
-    <div style={wrapper}>
+    <div style={wrapper} className="tabs-scroll">
       {tabs.map(tab => (
         <button
           key={tab.id}
@@ -27,6 +27,9 @@ const wrapper = {
   paddingBottom: '0',
   overflowX: 'auto',
   flexShrink: 0,
+  WebkitOverflowScrolling: 'touch',
+  scrollbarWidth: 'none',
+  msOverflowStyle: 'none',
 }
 const btn = {
   display: 'inline-flex', alignItems: 'center', gap: '6px',
