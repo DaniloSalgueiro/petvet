@@ -181,7 +181,7 @@ export default function FinanceiroPage() {
             </select>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="financeiro-dre-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             {/* Receitas */}
             <div className="card">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -286,7 +286,8 @@ export default function FinanceiroPage() {
             </button>
           </div>
 
-          <div className="table-wrapper">
+          {/* Tabela — desktop */}
+          <div className="financeiro-lan-table table-wrapper">
             <table>
               <thead>
                 <tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Método</th><th>Status</th><th style={{ textAlign: 'right' }}>Valor</th>{hasPermission('financeiro', 'delete') && <th></th>}</tr>
@@ -318,6 +319,34 @@ export default function FinanceiroPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* Cards — mobile */}
+          <div className="financeiro-lan-cards">
+            {filteredLans.map(l => (
+              <div key={l.id} className="card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: l.type === 'receita' ? 'var(--success)' : 'var(--danger)', flexShrink: 0 }} />
+                    <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.description || '—'}</span>
+                  </div>
+                  <span style={{ fontWeight: 700, fontSize: '0.9375rem', color: l.type === 'receita' ? 'var(--success)' : 'var(--danger)', whiteSpace: 'nowrap' }}>
+                    {l.type === 'receita' ? '+' : '−'} {fmt(l.value)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(l.date + 'T00:00').toLocaleDateString('pt-BR')}</span>
+                  <span className="badge badge-neutral">{l.category}</span>
+                  <span className={`badge ${l.status === 'recebido' || l.status === 'pago' ? 'badge-success' : l.status === 'pendente' ? 'badge-warning' : 'badge-neutral'}`}>{l.status}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{l.method}</span>
+                  {hasPermission('financeiro', 'delete') && (
+                    <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)', padding: 4, marginLeft: 'auto' }} onClick={() => setDeleteTarget(l)}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

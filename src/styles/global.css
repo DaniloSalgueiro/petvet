@@ -710,6 +710,64 @@ input, textarea, select, button {
 }
 
 /* =========================================================
+   FINANCEIRO — Responsividade Mobile
+   ========================================================= */
+
+/* Cards de lançamento: ocultos em desktop, visíveis em mobile */
+.financeiro-lan-cards {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 480px) {
+  /* DRE: 2 colunas → 1 coluna */
+  .financeiro-dre-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Tabela de lançamentos: ocultar, mostrar cards */
+  .financeiro-lan-table {
+    display: none !important;
+  }
+  .financeiro-lan-cards {
+    display: flex !important;
+  }
+
+  /* Stats grid: garantir 1 coluna no mobile */
+  .stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Cabeçalho da página: empilhar */
+  .page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+  .page-header > div:last-child {
+    width: 100%;
+  }
+  .page-header > div:last-child .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Comissões: grid de categorias — scroll horizontal */
+  .financeiro-comissoes-cats {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Seletor mês/ano nas abas DRE/Comissões */
+  .financeiro-month-row {
+    flex-wrap: wrap !important;
+  }
+  .financeiro-month-row .form-select {
+    flex: 1 !important;
+  }
+}
+
+/* =========================================================
    SALGUEIRO SYSTEMS — brand text
    ========================================================= */
 .ss-brand-text {

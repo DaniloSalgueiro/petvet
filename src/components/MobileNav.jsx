@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, Calendar, ShoppingCart,
   MoreHorizontal, FileText, Package, Scissors,
   DollarSign, Syringe, Pill, BarChart2,
-  UserCog, Briefcase, Tag, Settings, X,
+  UserCog, Briefcase, Tag, Settings, X, LogOut,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -32,8 +32,9 @@ const ADMIN_MORE = [
 ]
 
 export default function MobileNav({ currentPage, onNavigate }) {
-  const { hasRole, hasPermission } = useAuth()
+  const { logout, hasRole, hasPermission } = useAuth()
   const [showMore, setShowMore] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   function goTo(id) {
     onNavigate(id)
@@ -45,6 +46,7 @@ export default function MobileNav({ currentPage, onNavigate }) {
 
   return (
     <>
+      {/* Overlay do painel Mais */}
       {showMore && (
         <div
           className="mobile-more-overlay"
@@ -52,6 +54,7 @@ export default function MobileNav({ currentPage, onNavigate }) {
         />
       )}
 
+      {/* Painel Mais */}
       {showMore && (
         <div className="mobile-more-panel">
           <div className="mobile-more-header">
@@ -91,9 +94,49 @@ export default function MobileNav({ currentPage, onNavigate }) {
               )
             })}
           </div>
+
+          {/* Botão Sair */}
+          <div style={{ borderTop: '1px solid var(--border)', padding: '12px 16px 4px' }}>
+            <button
+              className="mobile-more-item"
+              style={{ color: 'var(--danger)', width: '100%' }}
+              onClick={() => { setShowMore(false); setShowLogoutConfirm(true) }}
+            >
+              <LogOut size={22} />
+              <span>Sair</span>
+            </button>
+          </div>
         </div>
       )}
 
+      {/* Modal de confirmação de logout */}
+      {showLogoutConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 14, boxShadow: 'var(--shadow-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#fed7d7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <LogOut size={20} color="var(--danger)" />
+              </div>
+              <h3 style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)', margin: 0 }}>Sair do sistema?</h3>
+            </div>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
+              Você será desconectado e precisará fazer login novamente.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setShowLogoutConfirm(false)}>Cancelar</button>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'var(--danger)', color: '#fff', border: 'none' }}
+                onClick={() => { setShowLogoutConfirm(false); logout() }}
+              >
+                Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navbar inferior */}
       <nav className="mobile-nav">
         <div className="mobile-nav-inner">
           {PRIMARY_NAV.map(item => {
