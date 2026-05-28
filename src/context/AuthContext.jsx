@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { loadFromSupabase, syncToSupabase } from '../hooks/useSupabaseSync'
 import { USUARIOS } from '../data/mock'
 
 const AuthContext = createContext(null)
@@ -34,6 +35,19 @@ function getPasswordMap() {
 
 function savePasswordMap(map) {
   try { localStorage.setItem('petvet-passwords', JSON.stringify(map)) } catch {}
+}
+
+// Busca petvet-passwords do Supabase e atualiza localStorage se dados forem válidos.
+// Retorna o mapa mais recente (Supabase ou localStorage como fallback).
+async function fetchAndMergePasswords() {
+  try {
+    const result = await loadFromSupabase('petvet-passwords')
+    if (result.ok && result.data && typeof result.data === 'object' && !Array.isArray(result.data)) {
+      savePasswordMap(result.data)
+      return result.data
+    }
+  } catch {}
+  return getPasswordMap()
 }
 
 function initializeAuthStorage() {
@@ -94,6 +108,8 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     initializeAuthStorage()
+    // Sincroniza senhas do Supabase na inicialização (atualiza localStorage com dados mais recentes)
+    fetchAndMergePasswords()
 
     // Ouve mudanças de sessão do Supabase (ex: expiração, logout externo)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -124,7 +140,8 @@ export function AuthProvider({ children }) {
       }
     } catch {}
 
-    // Tentativa 2: autenticação local (usuários ainda não migrados para o Supabase Auth)
+    // Tentativa 2: busca senhas atualizadas do Supabase antes de autenticar localmente
+    await fetchAndMergePasswords()
     return loginLegacy(email, password)
   }
 
@@ -174,11 +191,12 @@ export function AuthProvider({ children }) {
   // ── Troca de senha ─────────────────────────────────────────────────────────
   async function changePassword(newPassword) {
     if (!user) return
-    // Atualiza no mapa local (compatibilidade legacy)
     const map = getPasswordMap()
     map[user.id] = { password: newPassword, firstLogin: false }
     savePasswordMap(map)
     setMustChangePassword(false)
+    // Sincroniza com Supabase (fire-and-forget para não bloquear o UI)
+    syncToSupabase('petvet-passwords', map)
     // Atualiza no Supabase Auth se a sessão for do Supabase
     try { await supabase.auth.updateUser({ password: newPassword }) } catch {}
   }
@@ -187,6 +205,8 @@ export function AuthProvider({ children }) {
     const map = getPasswordMap()
     map[userId] = { password: DEFAULT_PASSWORD, firstLogin: true }
     savePasswordMap(map)
+    // Sincroniza com Supabase (fire-and-forget)
+    syncToSupabase('petvet-passwords', map)
   }
 
   return (
