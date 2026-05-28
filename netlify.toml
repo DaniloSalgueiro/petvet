@@ -8,14 +8,16 @@
   CI = "false"
 
 [[redirects]]
-  from = "/app-icon"
-  to = "/.netlify/functions/app-icon"
-  status = 200
-
-[[redirects]]
   from = "/manifest.json"
   to = "/.netlify/functions/manifest"
   status = 200
+  force = true
+
+[[redirects]]
+  from = "/app-icon"
+  to = "/.netlify/functions/app-icon"
+  status = 200
+  force = true
 
 # SPA fallback — todas as rotas para index.html
 [[redirects]]

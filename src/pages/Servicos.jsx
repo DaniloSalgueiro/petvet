@@ -29,7 +29,7 @@ const EMPTY_SVC = { name: '', category: 'Consulta', duration: 30, price: '' }
 const EMPTY_HOSP = { petId: '', tutorId: '', checkIn: '', checkOut: '', dailyRate: 80, observations: '' }
 
 export default function ServicosPage() {
-  const { hasRole } = useAuth()
+  const { hasPermission } = useAuth()
   const [activeTab, setActiveTab] = useState('fila')
   const [agendamentos, setAgendamentos] = usePersistentState('petvet-svc-agendamentos', AGENDAMENTOS)
   const [catalogo, setCatalogo] = usePersistentState('petvet-catalogo', SERVICOS_CATALOGO)
@@ -150,13 +150,13 @@ export default function ServicosPage() {
           <h2 className="page-title">Serviços</h2>
           <p className="page-subtitle">Fila do dia, consultório e hospedagem</p>
         </div>
-        {activeTab === 'catalogo' && hasRole('admin') && (
+        {activeTab === 'catalogo' && hasPermission('servicos', 'edit') && (
           <button className="btn btn-primary" onClick={openAddSvc}><Plus size={16} /> Novo Serviço</button>
         )}
-        {activeTab === 'domicilio' && hasRole('admin') && (
+        {activeTab === 'domicilio' && hasPermission('servicos', 'edit') && (
           <button className="btn btn-primary" onClick={openAddDom}><Plus size={16} /> Novo Serviço Domiciliar</button>
         )}
-        {activeTab === 'hospedagem' && hasRole('admin', 'atendente') && (
+        {activeTab === 'hospedagem' && hasPermission('servicos', 'edit') && (
           <button className="btn btn-primary" onClick={openAddHosp}><Plus size={16} /> Nova Hospedagem</button>
         )}
       </div>
@@ -205,7 +205,7 @@ export default function ServicosPage() {
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <Clock size={14} style={{ color: 'var(--text-muted)' }} />
                   <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>{apt.duration}min</span>
-                  {hasRole('admin') && (
+                  {hasPermission('servicos', 'delete') && (
                     <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)', padding: 2 }}
                       onClick={e => { e.stopPropagation(); setDeleteAptTarget(apt) }} title="Excluir">
                       <Trash2 size={14} />
@@ -242,7 +242,7 @@ export default function ServicosPage() {
                       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{svc.duration >= 60 ? `${Math.floor(svc.duration / 60)}h${svc.duration % 60 > 0 ? svc.duration % 60 + 'min' : ''}` : `${svc.duration}min`}</p>
                     </div>
                   </div>
-                  {hasRole('admin') && (
+                  {hasPermission('servicos', 'edit') && (
                     <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => openEditSvc(svc)}>Editar</button>
                       <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setDeleteSvcTarget(svc)} title="Excluir">
@@ -288,7 +288,7 @@ export default function ServicosPage() {
                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{svc.duration >= 60 ? `${Math.floor(svc.duration / 60)}h${svc.duration % 60 > 0 ? svc.duration % 60 + 'min' : ''}` : `${svc.duration}min`}</p>
                       </div>
                     </div>
-                    {hasRole('admin') && (
+                    {hasPermission('servicos', 'edit') && (
                       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => openEditDom(svc)}>Editar</button>
                         <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setDeleteDomTarget(svc)} title="Excluir">
@@ -350,10 +350,10 @@ export default function ServicosPage() {
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <p style={{ fontWeight: 800, color: 'var(--teal)', fontSize: '1.05rem' }}>R$ {(h.dailyRate * diasDecorridos).toFixed(2)}</p>
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{diasDecorridos} de {dias} diárias</p>
-                    {hasRole('admin', 'atendente') && (
+                    {hasPermission('servicos', 'edit') && (
                       <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
                         <button className="btn btn-outline btn-sm" onClick={() => checkOut(h.id)}>Check-out</button>
-                        {hasRole('admin') && (
+                        {hasPermission('servicos', 'delete') && (
                           <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setDeleteHospTarget(h)} title="Excluir">
                             <Trash2 size={14} />
                           </button>

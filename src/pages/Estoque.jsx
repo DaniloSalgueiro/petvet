@@ -43,7 +43,7 @@ function stockStatus(qty, min) {
 }
 
 export default function EstoquePage() {
-  const { hasRole } = useAuth()
+  const { hasPermission } = useAuth()
   const [produtos, setProdutos] = usePersistentState('petvet-produtos', PRODUTOS)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Todos')
@@ -126,7 +126,7 @@ export default function EstoquePage() {
             }}>
             <Download size={14} /> Exportar CSV
           </button>
-          {hasRole('admin', 'atendente') && (
+          {hasPermission('estoque', 'edit') && (
             <button className="btn btn-primary" onClick={openAdd}>
               <Plus size={16} /> Novo Produto
             </button>
@@ -208,7 +208,7 @@ export default function EstoquePage() {
             <tr>
               <th>Produto</th><th>Categoria</th><th>Local</th>
               <th>Qtd</th><th>Mín</th><th>Status</th><th>Validade</th>
-              {hasRole('admin', 'atendente') && <th>Ações</th>}
+              {hasPermission('estoque', 'edit') && <th>Ações</th>}
             </tr>
           </thead>
           <tbody>
@@ -237,7 +237,7 @@ export default function EstoquePage() {
                   <td>
                     <span className={`badge badge-${exp.color}`}>{p.expiryDate === '' ? 'N/D' : new Date(p.expiryDate + 'T00:00').toLocaleDateString('pt-BR')}</span>
                   </td>
-                  {hasRole('admin', 'atendente') && (
+                  {hasPermission('estoque', 'edit') && (
                     <td>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button className="btn btn-ghost btn-sm btn-icon" style={{ padding: '3px 8px', fontSize: '0.85rem', fontWeight: 700 }} onClick={() => adjustQty(p.id, -1)}>−</button>

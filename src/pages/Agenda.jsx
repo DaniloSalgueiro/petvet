@@ -132,7 +132,7 @@ function FiltroBarra({ statusFilter, setStatusFilter, typeFilter, setTypeFilter,
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function AgendaPage({ navParams = {} }) {
-  const { hasRole } = useAuth()
+  const { hasRole, hasPermission } = useAuth()
   const { enqueueFollowup } = useFollowup()
   const today = new Date('2026-05-14')
   const [year, setYear] = useState(today.getFullYear())
@@ -377,7 +377,7 @@ export default function AgendaPage({ navParams = {} }) {
           <h2 className="page-title">Agenda</h2>
           <p className="page-subtitle">{agendamentos.filter(a => a?.date === '2026-05-14').length} agendamentos hoje</p>
         </div>
-        {hasRole('admin', 'atendente', 'veterinario') && (
+        {hasPermission('agenda', 'edit') && (
           <button className="btn btn-primary" onClick={openNew}>
             <Plus size={16} /> Novo Agendamento
           </button>
@@ -428,8 +428,8 @@ export default function AgendaPage({ navParams = {} }) {
                   <div
                     key={apt.id}
                     className="card"
-                    style={{ padding: '12px 14px', borderLeft: `3px solid ${cfg.color}`, cursor: hasRole('admin', 'atendente', 'veterinario') ? 'pointer' : 'default' }}
-                    onClick={() => hasRole('admin', 'atendente', 'veterinario') && openEdit(apt)}
+                    style={{ padding: '12px 14px', borderLeft: `3px solid ${cfg.color}`, cursor: hasPermission('agenda', 'edit') ? 'pointer' : 'default' }}
+                    onClick={() => hasPermission('agenda', 'edit') && openEdit(apt)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <div>
@@ -553,7 +553,7 @@ export default function AgendaPage({ navParams = {} }) {
               <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                 {selectedDateLabel}
               </h3>
-              {hasRole('admin', 'atendente', 'veterinario') && (
+              {hasPermission('agenda', 'edit') && (
                 <button className="btn btn-primary btn-sm btn-icon" onClick={openNew} title="Novo agendamento">
                   <Plus size={15} />
                 </button>
@@ -582,8 +582,8 @@ export default function AgendaPage({ navParams = {} }) {
                   return (
                     <div
                       key={apt.id}
-                      style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)', borderLeft: `3px solid ${cfg.color}`, cursor: hasRole('admin', 'atendente', 'veterinario') ? 'pointer' : 'default' }}
-                      onClick={() => hasRole('admin', 'atendente', 'veterinario') && openEdit(apt)}
+                      style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)', borderLeft: `3px solid ${cfg.color}`, cursor: hasPermission('agenda', 'edit') ? 'pointer' : 'default' }}
+                      onClick={() => hasPermission('agenda', 'edit') && openEdit(apt)}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                         <span style={{ fontWeight: 700, fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{apt.time} · {petName}</span>
@@ -592,7 +592,7 @@ export default function AgendaPage({ navParams = {} }) {
                             <span style={{ fontSize: '0.6rem', padding: '1px 5px', borderRadius: 4, background: '#e6f0ff', color: '#1a5fb4', fontWeight: 600, border: '1px solid #a3c3ef' }}>🏠 Dom.</span>
                           )}
                           <span className={`badge badge-${stCfg.color}`} style={{ fontSize: '0.65rem' }}>{stCfg.label}</span>
-                          {hasRole('admin') && (
+                          {hasPermission('agenda', 'delete') && (
                             <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)', padding: 2 }}
                               onClick={e => { e.stopPropagation(); setDeleteTarget(apt) }} title="Excluir">
                               <Trash2 size={12} />
@@ -610,18 +610,18 @@ export default function AgendaPage({ navParams = {} }) {
                           📍 {apt.enderecoAtendimento}
                         </div>
                       )}
-                      {apt.status === 'agendado' && hasRole('admin', 'atendente') && (
+                      {apt.status === 'agendado' && hasPermission('agenda', 'edit') && (
                         <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
                           <button className="btn btn-outline btn-sm" style={{ fontSize: '0.7rem', padding: '3px 8px' }} onClick={e => { e.stopPropagation(); updateStatus(apt.id, 'confirmado') }}>Confirmar</button>
                           <button className="btn btn-outline-danger btn-sm" style={{ fontSize: '0.7rem', padding: '3px 8px' }} onClick={e => { e.stopPropagation(); updateStatus(apt.id, 'cancelado') }}>Cancelar</button>
                         </div>
                       )}
-                      {apt.status === 'confirmado' && hasRole('admin', 'atendente', 'veterinario') && (
+                      {apt.status === 'confirmado' && hasPermission('agenda', 'edit') && (
                         <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '3px 10px', marginTop: 6 }} onClick={e => { e.stopPropagation(); updateStatus(apt.id, 'em-atendimento') }}>
                           Iniciar atendimento
                         </button>
                       )}
-                      {apt.status === 'em-atendimento' && hasRole('admin', 'veterinario') && (
+                      {apt.status === 'em-atendimento' && hasPermission('agenda', 'edit') && (
                         <button className="btn btn-primary btn-sm" style={{ fontSize: '0.7rem', padding: '3px 10px', marginTop: 6, background: 'var(--success)', borderColor: 'var(--success)' }} onClick={e => { e.stopPropagation(); updateStatus(apt.id, 'concluido') }}>
                           Concluir
                         </button>

@@ -688,7 +688,7 @@ function DermaCanvas({ value, onChange, disabled }) {
 }
 
 export default function ProntuarioPage({ navParams = {} }) {
-  const { user, hasRole } = useAuth()
+  const { user, hasRole, hasPermission } = useAuth()
   const vets = getVeterinarios()
   const [prontuarios, setProntuarios] = usePersistentState('petvet-prontuarios', PRONTUARIOS)
   const [prontuarioConfig, setProntuarioConfig] = usePersistentState('petvet-prontuario-config', DEFAULT_PRONTUARIO_CONFIG)
@@ -717,7 +717,7 @@ export default function ProntuarioPage({ navParams = {} }) {
 
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfirmed, setExportConfirmed] = useState(false)
-  const [exportFiltro, setExportFiltro] = useState({ tipo: 'todos', de: '', ate: '', petId: '', vetId: '' })
+  const [exportFiltro, setExportFiltro] = useState({ tipo: 'todos', de: '', ate: '', petId: '', vetId: '', profissional: 'todos', profissionalId: '' })
   const [exportSuccess, setExportSuccess] = useState(null)
   const [showImportModal, setShowImportModal] = useState(false)
   const [importData, setImportData] = useState(null)
@@ -976,7 +976,7 @@ export default function ProntuarioPage({ navParams = {} }) {
   function removeMed(idx)              { setForm(f => ({ ...f, prescricao: { ...f.prescricao, medicamentos: f.prescricao.medicamentos.filter((_, i) => i !== idx) } })) }
   function findBulaForPresc(nome)      { return bulario.find(m => norm(m.nomeComercial) === norm(nome) || normIncludes(m.nomeComercial, nome)) ?? null }
 
-  const isReadOnly = selectedPr && !hasRole('admin', 'veterinario')
+  const isReadOnly = selectedPr && !hasPermission('prontuario', 'edit')
   const sectionIdx = visibleSections.findIndex(s => s.id === activeSection)
   const especie = form.vitals?.especie ?? 'Cão'
 
@@ -1102,7 +1102,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                     </label>
                   ))}
                 </div>
-                {hasRole('admin') && !isReadOnly && (
+                {hasPermission('prontuario', 'edit') && !isReadOnly && (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', maxWidth: 400, marginTop: 4 }}>
                     <input className="form-input" placeholder="Novo tipo de consulta..." value={newTipoInput} onChange={e => setNewTipoInput(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && addTipo()} />
@@ -2420,17 +2420,22 @@ export default function ProntuarioPage({ navParams = {} }) {
       prontuarios: registros,
     }
 
+    const profSlug = exportFiltro.profissional === 'eu'
+      ? (user?.name ?? 'eu').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+      : exportFiltro.profissional === 'vet' && exportFiltro.profissionalId
+        ? (getVeterinarios().find(v => v.id === exportFiltro.profissionalId)?.name ?? 'vet').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+        : 'todos'
     const blob = new Blob(['﻿' + JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `prontuarios_${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `petvet-prontuarios-${profSlug}-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
     setExportSuccess(registros.length)
     setShowExportModal(false)
     setExportConfirmed(false)
-    setExportFiltro({ tipo: 'todos', de: '', ate: '', petId: '', vetId: '' })
+    setExportFiltro({ tipo: 'todos', de: '', ate: '', petId: '', vetId: '', profissional: 'todos', profissionalId: '' })
   }
 
   function handleImportFile(e) {
@@ -2552,18 +2557,20 @@ export default function ProntuarioPage({ navParams = {} }) {
           <button className="btn btn-outline btn-sm" onClick={() => setShowFichasModal(true)}>
             📄 Fichas para preenchimento
           </button>
-          {hasRole('admin') && (
+          {hasPermission('prontuario-export', 'view') && (
+            <button className="btn btn-outline btn-sm" onClick={() => { setShowExportModal(true); setExportConfirmed(false); setExportSuccess(null) }}>
+              📥 Exportar prontuários
+            </button>
+          )}
+          {hasPermission('prontuario-export', 'edit') && (
             <>
-              <button className="btn btn-outline btn-sm" onClick={() => { setShowExportModal(true); setExportConfirmed(false); setExportSuccess(null) }}>
-                📥 Exportar prontuários
-              </button>
               <button className="btn btn-outline btn-sm" onClick={() => importFileRef.current?.click()}>
                 📤 Importar prontuários
               </button>
               <input ref={importFileRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImportFile} />
             </>
           )}
-          {hasRole('admin', 'veterinario') && (
+          {hasPermission('prontuario', 'edit') && (
             <button className="btn btn-primary" onClick={openNew}><Plus size={16} /> Novo Prontuário</button>
           )}
         </div>
@@ -2760,7 +2767,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                   <td>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <ChevronRight size={16} style={{ color: 'var(--text-muted)' }} />
-                      {hasRole('admin', 'veterinario') && (
+                      {hasPermission('prontuario', 'delete') && (
                         <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)', padding: '2px 4px' }} onClick={e => { e.stopPropagation(); setDeleteTarget(pr) }}><X size={14} /></button>
                       )}
                     </div>
@@ -2797,6 +2804,11 @@ export default function ProntuarioPage({ navParams = {} }) {
           filtered = filtered.filter(p => p.petId === exportFiltro.petId)
         } else if (exportFiltro.tipo === 'vet' && exportFiltro.vetId) {
           filtered = filtered.filter(p => p.vetId === exportFiltro.vetId)
+        }
+        if (exportFiltro.profissional === 'eu') {
+          filtered = filtered.filter(p => p.vetId === user?.id)
+        } else if (exportFiltro.profissional === 'vet' && exportFiltro.profissionalId) {
+          filtered = filtered.filter(p => p.vetId === exportFiltro.profissionalId)
         }
         const petsCount = new Set(filtered.map(p => p.petId)).size
         return (
@@ -2853,6 +2865,43 @@ export default function ProntuarioPage({ navParams = {} }) {
                   </select>
                 </div>
               )}
+
+              {/* Filtro de profissional responsável */}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                <label className="form-label" style={{ marginBottom: 8 }}>Profissional responsável</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { value: 'todos', label: 'Todos os profissionais' },
+                    { value: 'eu',    label: `Apenas eu (${user?.name ?? 'usuário logado'})` },
+                    { value: 'vet',   label: 'Veterinário específico' },
+                  ].map(opt => (
+                    <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <input
+                        type="radio"
+                        name="profissional"
+                        value={opt.value}
+                        checked={exportFiltro.profissional === opt.value}
+                        onChange={() => setExportFiltro(f => ({ ...f, profissional: opt.value, profissionalId: '' }))}
+                        style={{ accentColor: 'var(--teal)' }}
+                      />
+                      {opt.label}
+                    </label>
+                  ))}
+                </div>
+                {exportFiltro.profissional === 'vet' && (
+                  <select
+                    className="form-select"
+                    style={{ marginTop: 8 }}
+                    value={exportFiltro.profissionalId}
+                    onChange={e => setExportFiltro(f => ({ ...f, profissionalId: e.target.value }))}
+                  >
+                    <option value="">Selecione o veterinário...</option>
+                    {getVeterinarios().map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
 
               <div style={{ background: 'var(--background)', borderRadius: 10, padding: '10px 14px', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
                 <strong style={{ color: 'var(--text)' }}>{filtered.length}</strong> prontuário{filtered.length !== 1 ? 's' : ''} de <strong style={{ color: 'var(--text)' }}>{petsCount}</strong> pet{petsCount !== 1 ? 's' : ''} serão exportados

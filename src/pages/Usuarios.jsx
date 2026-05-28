@@ -15,21 +15,22 @@ const ROLE_CONFIG = {
 }
 
 const MODULE_LABELS = {
-  dashboard:           'Dashboard',
-  pets:                'Pets & Tutores',
-  prontuario:          'Prontuário',
-  agenda:              'Agenda',
-  estoque:             'Estoque',
-  servicos:            'Serviços',
-  financeiro:          'Financeiro',
-  relatorios:          'Relatórios',
-  bulario:             'Bulário',
-  usuarios:            'Usuários',
-  funcionarios:        'Funcionários',
-  racas:               'Raças',
-  'prontuario-config': 'Config. Prontuário',
-  configuracoes:       'Configurações',
-  followup:            'Follow-up',
+  dashboard:            'Dashboard',
+  pets:                 'Pets & Tutores',
+  prontuario:           'Prontuário',
+  agenda:               'Agenda',
+  estoque:              'Estoque',
+  servicos:             'Serviços',
+  financeiro:           'Financeiro',
+  relatorios:           'Relatórios',
+  bulario:              'Bulário',
+  usuarios:             'Usuários',
+  funcionarios:         'Funcionários',
+  racas:                'Raças',
+  'prontuario-config':  'Config. Prontuário',
+  'prontuario-export':  'Exportar / Importar Prontuários',
+  configuracoes:        'Configurações',
+  followup:             'Follow-up',
 }
 
 const P = (view, edit, del) => ({ view, edit, delete: del })
@@ -48,26 +49,28 @@ const DEFAULT_PERMISSIONS = {
     usuarios:            P(false, false, false),
     funcionarios:        P(false, false, false),
     racas:               P(false, false, false),
-    'prontuario-config': P(false, false, false),
-    configuracoes:       P(false, false, false),
-    followup:            P(false, false, false),
+    'prontuario-config':  P(false, false, false),
+    'prontuario-export':  P(false, false, false),
+    configuracoes:        P(false, false, false),
+    followup:             P(false, false, false),
   },
   atendente: {
-    dashboard:           P(true,  false, false),
-    pets:                P(true,  true,  false),
-    prontuario:          P(false, false, false),
-    agenda:              P(true,  true,  false),
-    estoque:             P(true,  true,  false),
-    servicos:            P(true,  true,  false),
-    financeiro:          P(false, false, false),
-    relatorios:          P(false, false, false),
-    bulario:             P(false, false, false),
-    usuarios:            P(false, false, false),
-    funcionarios:        P(false, false, false),
-    racas:               P(false, false, false),
-    'prontuario-config': P(false, false, false),
-    configuracoes:       P(false, false, false),
-    followup:            P(false, false, false),
+    dashboard:            P(true,  false, false),
+    pets:                 P(true,  true,  false),
+    prontuario:           P(false, false, false),
+    agenda:               P(true,  true,  false),
+    estoque:              P(true,  true,  false),
+    servicos:             P(true,  true,  false),
+    financeiro:           P(false, false, false),
+    relatorios:           P(false, false, false),
+    bulario:              P(false, false, false),
+    usuarios:             P(false, false, false),
+    funcionarios:         P(false, false, false),
+    racas:                P(false, false, false),
+    'prontuario-config':  P(false, false, false),
+    'prontuario-export':  P(false, false, false),
+    configuracoes:        P(false, false, false),
+    followup:             P(false, false, false),
   },
 }
 
@@ -557,6 +560,9 @@ export default function UsuariosPage() {
   )
 }
 
+const EXPORT_MODULE = 'prontuario-export'
+const EXPORT_LEVEL_LABELS = { view: 'Exportar', edit: 'Importar' }
+
 function PermissionMatrix({ getP, setP, disabled }) {
   return (
     <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid var(--border)' }}>
@@ -570,22 +576,37 @@ function PermissionMatrix({ getP, setP, disabled }) {
           </tr>
         </thead>
         <tbody>
-          {Object.entries(MODULE_LABELS).map(([mod, label], idx) => (
-            <tr key={mod} style={{ borderTop: idx > 0 ? '1px solid var(--border)' : 'none' }}>
-              <td style={{ padding: '9px 12px', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{label}</td>
-              {['view', 'edit', 'delete'].map(level => (
-                <td key={level} style={{ padding: '9px 12px', textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={getP(mod, level)}
-                    onChange={e => setP(mod, level, e.target.checked)}
-                    disabled={disabled}
-                    style={{ accentColor: 'var(--teal)', width: 16, height: 16, cursor: disabled ? 'default' : 'pointer' }}
-                  />
+          {Object.entries(MODULE_LABELS).map(([mod, label], idx) => {
+            const isExport = mod === EXPORT_MODULE
+            return (
+              <tr key={mod} style={{ borderTop: idx > 0 ? '1px solid var(--border)' : 'none', background: isExport ? 'var(--teal-light)' : 'transparent' }}>
+                <td style={{ padding: '9px 12px', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  {label}
+                  {isExport && (
+                    <span style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 400, color: 'var(--text-muted)' }}>
+                      (Visualizar = Exportar · Editar = Importar)
+                    </span>
+                  )}
                 </td>
-              ))}
-            </tr>
-          ))}
+                {['view', 'edit', 'delete'].map(level => {
+                  if (isExport && level === 'delete') {
+                    return <td key={level} style={{ padding: '9px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>—</td>
+                  }
+                  return (
+                    <td key={level} style={{ padding: '9px 12px', textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={getP(mod, level)}
+                        onChange={e => setP(mod, level, e.target.checked)}
+                        disabled={disabled}
+                        style={{ accentColor: 'var(--teal)', width: 16, height: 16, cursor: disabled ? 'default' : 'pointer' }}
+                      />
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

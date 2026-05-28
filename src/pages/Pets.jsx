@@ -58,7 +58,7 @@ const EMPTY_PET = {
 const EMPTY_TUTOR = { name: '', cpf: '', rg: '', phone: '', email: '', address: '' }
 
 export default function PetsPage({ navigateTo, navParams }) {
-  const { hasRole } = useAuth()
+  const { hasRole, hasPermission } = useAuth()
   const [pets, setPets] = usePersistentState('petvet-pets', PETS)
   const [tutores, setTutores] = usePersistentState('petvet-tutores', TUTORES)
   const [view, setView] = useState('list')
@@ -154,7 +154,7 @@ export default function PetsPage({ navigateTo, navParams }) {
   return (
     <>
       {view === 'detail' && selectedPet ? (
-        <PetDetail pet={selectedPet} tutores={tutores} onBack={() => setView('list')} onEdit={() => openEditPet(selectedPet)} hasRole={hasRole} navigateTo={navigateTo} onDeleteTutor={setDeleteTutorTarget} onDeletePet={setDeleteTarget}
+        <PetDetail pet={selectedPet} tutores={tutores} onBack={() => setView('list')} onEdit={() => openEditPet(selectedPet)} hasRole={hasRole} hasPermission={hasPermission} navigateTo={navigateTo} onDeleteTutor={setDeleteTutorTarget} onDeletePet={setDeleteTarget}
           onEditTutor={t => { setEditingTutor(t); setTutorForm({ ...EMPTY_TUTOR, ...t }); setTutorDupWarn(''); setShowTutorModal(true) }} />
       ) : (
       <div className="page">
@@ -163,7 +163,7 @@ export default function PetsPage({ navigateTo, navParams }) {
             <h2 className="page-title">Pets & Tutores</h2>
             <p className="page-subtitle">{pageTab === 'pets' ? `${pets.length} animais cadastrados` : `${tutores.length} tutores cadastrados`}</p>
           </div>
-          {hasRole('admin', 'atendente') && (
+          {hasPermission('pets', 'edit') && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button className="btn btn-outline btn-sm" onClick={() => { setEditingTutor(null); setTutorForm(EMPTY_TUTOR); setTutorDupWarn(''); setShowTutorModal(true) }}>
                 <Plus size={15} /> Novo Tutor
@@ -224,12 +224,12 @@ export default function PetsPage({ navigateTo, navParams }) {
                           <td><span className="badge badge-teal">{petCount} pet{petCount !== 1 ? 's' : ''}</span></td>
                           <td>
                             <div style={{ display: 'flex', gap: 6 }}>
-                              {hasRole('admin', 'atendente') && (
+                              {hasPermission('pets', 'edit') && (
                                 <button className="btn btn-outline btn-sm" onClick={() => { setEditingTutor(t); setTutorForm({ ...EMPTY_TUTOR, ...t }); setTutorDupWarn(''); setShowTutorModal(true) }}>
                                   <Edit2 size={13} /> Editar
                                 </button>
                               )}
-                              {hasRole('admin') && (
+                              {hasPermission('pets', 'delete') && (
                                 <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => setDeleteTutorTarget(t)} title="Excluir tutor">
                                   <X size={13} />
                                 </button>
@@ -312,7 +312,7 @@ export default function PetsPage({ navigateTo, navParams }) {
                     <span className={`badge badge-${VAC_COLOR[pet.vacinacao]}`}>Vacina: {pet.vacinacao}</span>
                     {pet.castrado === 'Sim' && <span className="badge badge-teal">Castrado</span>}
                     {pet.weight && <span className="badge badge-neutral">{pet.weight} kg</span>}
-                    {hasRole('admin', 'atendente') && (
+                    {hasPermission('pets', 'delete') && (
                       <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', color: 'var(--danger)', padding: '2px 6px' }}
                         onClick={e => { e.stopPropagation(); setDeleteTarget(pet) }} title="Excluir pet">
                         <X size={13} />
@@ -523,7 +523,7 @@ export default function PetsPage({ navigateTo, navParams }) {
 }
 
 // ---- PET DETAIL ----
-function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDeleteTutor, onDeletePet, onEditTutor }) {
+function PetDetail({ pet, tutores, onBack, onEdit, hasRole, hasPermission, navigateTo, onDeleteTutor, onDeletePet, onEditTutor }) {
   const tutor = tutores.find(t => t.id === pet.tutorId)
   const consultas = AGENDAMENTOS.filter(a => a.petId === pet.id).sort((a, b) => b.date.localeCompare(a.date))
   const pronts = PRONTUARIOS.filter(p => p.petId === pet.id)
@@ -545,10 +545,10 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
               <button className="btn btn-outline btn-sm" onClick={() => navigateTo('agenda', { petId: pet.id, openNew: true, type: 'banho' })}>Agendar serviço</button>
             </>
           )}
-          {hasRole('admin', 'atendente') && (
+          {hasPermission('pets', 'edit') && (
             <button className="btn btn-outline btn-sm" onClick={onEdit}><Edit2 size={14} /> Editar</button>
           )}
-          {hasRole('admin') && onDeletePet && (
+          {hasPermission('pets', 'delete') && onDeletePet && (
             <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => onDeletePet(pet)}><Trash2 size={14} /></button>
           )}
         </div>
@@ -592,10 +592,10 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, navigateTo, onDelete
           <div className="pet-tutor-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>Responsável (Tutor)</h3>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              {tutor && hasRole('admin', 'atendente') && onEditTutor && (
+              {tutor && hasPermission('pets', 'edit') && onEditTutor && (
                 <button className="btn btn-outline btn-sm" onClick={() => onEditTutor(tutor)}>✏️ Editar tutor</button>
               )}
-              {tutor && hasRole('admin') && (
+              {tutor && hasPermission('pets', 'delete') && (
                 <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'var(--danger)' }} onClick={() => onDeleteTutor(tutor)}><X size={14} /></button>
               )}
             </div>
