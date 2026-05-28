@@ -29,6 +29,22 @@ export function useCloudState(key, initialValue) {
   const isInitialRef  = useRef(true)   // true até o primeiro efeito de save passar
   const fromCloudRef  = useRef(false)  // true quando setState veio do Supabase
 
+  // ── Escuta evento de sync periódico do App.jsx ────────────────────────────
+  useEffect(() => {
+    function handleSync(e) {
+      if (e.detail?.key !== key) return
+      try {
+        const updated = JSON.parse(localStorage.getItem(key))
+        if (updated !== null) {
+          fromCloudRef.current = true
+          setState(updated)
+        }
+      } catch {}
+    }
+    window.addEventListener('supabase-sync', handleSync)
+    return () => window.removeEventListener('supabase-sync', handleSync)
+  }, [key])
+
   // ── Busca do Supabase na montagem ──────────────────────────────────────────
   useEffect(() => {
     mountedRef.current = true

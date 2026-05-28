@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { loadAll } from './hooks/useSupabaseSync'
+import { loadAll, loadFromSupabase } from './hooks/useSupabaseSync'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { IdentidadeProvider } from './context/IdentidadeContext'
@@ -110,12 +110,36 @@ function PageRouter({ page, navParams, navigateTo }) {
   }
 }
 
+const CRITICAL_KEYS = [
+  'petvet-pets',
+  'petvet-tutores',
+  'petvet-agendamentos',
+  'petvet-prontuarios',
+]
+
 export default function App() {
+  // Carga inicial: traz todos os dados do Supabase de uma vez (1 query)
   useEffect(() => {
-    // Pré-popula o localStorage com todos os dados do Supabase numa única query.
-    // Os hooks useCloudState fazem suas próprias buscas individuais em paralelo,
-    // mas este loadAll garante que navegações subsequentes iniciam com dados atuais.
     loadAll()
+  }, [])
+
+  // Sincronização periódica dos dados críticos a cada 30s.
+  // Dispara evento supabase-sync quando detecta mudança para atualizar useCloudState.
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      for (const key of CRITICAL_KEYS) {
+        const result = await loadFromSupabase(key)
+        if (!result.ok || result.data === null) continue
+        let local = null
+        try { local = JSON.parse(localStorage.getItem(key) ?? 'null') } catch {}
+        if (JSON.stringify(result.data) !== JSON.stringify(local)) {
+          try { localStorage.setItem(key, JSON.stringify(result.data)) } catch {}
+          window.dispatchEvent(new CustomEvent('supabase-sync', { detail: { key } }))
+        }
+      }
+    }, 30000)
+
+    return () => clearInterval(interval)
   }, [])
 
   return (
