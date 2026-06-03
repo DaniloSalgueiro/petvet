@@ -1,54 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Search, Plus, X, ChevronRight, Trash2 } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { useAuth } from '../context/AuthContext'
-import { normIncludes, norm } from '../utils/normalizeText'
+import { normIncludes } from '../utils/normalizeText'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { syncToSupabase } from '../hooks/useSupabaseSync'
+import { BULARIO_INICIAL } from '../data/bulario'
 
-const CATEGORIAS = ['Antibióticos', 'Analgésicos/Anti-inflamatórios', 'Corticoides', 'Gastroentérologia', 'Cardiovascular', 'Neurológico', 'Dermatológico', 'Antiparasitários', 'Anestésicos', 'Oncológico', 'Outros']
+const CATEGORIAS = [
+  'Antibióticos', 'Analgésicos/Anti-inflamatórios', 'Corticoides', 'Gastroentérologia',
+  'Cardiovascular', 'Neurológico', 'Dermatológico', 'Antiparasitários', 'Respiratório',
+  'Hormonal/Reprodutivo', 'Oftálmico', 'Otológico', 'Anestésico/Sedativo',
+  'Suplemento/Nutricional', 'Cannabis/Fitoterápico', 'Oncológico', 'Outros',
+]
 
 const EMPTY_MED = {
   nomeComercial: '', nomeGenerico: '', fabricante: '', apresentacao: '', concentracao: '',
   indicacoes: '', contraindicacoes: '',
   doseCao: '', doseGato: '', doseOutros: '',
-  via: '', frequencia: '', tempoPtto: '',
+  via: '', frequencia: '', duracao: '',
   efeitosAdversos: '', interacoes: '', observacoes: '',
   categoria: 'Antibióticos', foto: null,
 }
 
-const INITIAL_BULARIO = [
-  { id: 'b01', categoria: 'Antibióticos', nomeComercial: 'Amoxil Vet', nomeGenerico: 'Amoxicilina', fabricante: 'Zoetis', apresentacao: 'Comprimidos 250mg', concentracao: '250 mg', indicacoes: 'Infecções bacterianas (pele, trato respiratório, urinário)', contraindicacoes: 'Hipersensibilidade a penicilinas', doseCao: '11-22 mg/kg', doseGato: '11-22 mg/kg', doseOutros: 'Consultar especialista', via: 'VO', frequencia: '2x ao dia (12/12h)', tempoPtto: '5–10 dias', efeitosAdversos: 'Diarréia, vômito, reação alérgica rara', interacoes: 'Tetraciclinas (antagonismo)', observacoes: 'Administrar com ou sem alimento', foto: null },
-  { id: 'b02', categoria: 'Antibióticos', nomeComercial: 'Clavamox', nomeGenerico: 'Amoxicilina + Clavulanato', fabricante: 'Zoetis', apresentacao: 'Comprimidos 62,5mg / 250mg', concentracao: '62,5 / 250 mg', indicacoes: 'Infecções por bactérias produtoras de beta-lactamase', contraindicacoes: 'Hipersensibilidade a penicilinas', doseCao: '12,5 mg/kg', doseGato: '12,5 mg/kg', doseOutros: '—', via: 'VO', frequencia: '2x ao dia', tempoPtto: '5–14 dias', efeitosAdversos: 'Distúrbios GI, diarreia', interacoes: 'Anticoagulantes', observacoes: 'Administrar com alimento para reduzir náusea', foto: null },
-  { id: 'b03', categoria: 'Antibióticos', nomeComercial: 'Cefalexina Vet', nomeGenerico: 'Cefalexina', fabricante: 'Genérico', apresentacao: 'Comprimidos 500mg', concentracao: '500 mg', indicacoes: 'Infecções de pele, piodermites, otites', contraindicacoes: 'Hipersensibilidade a cefalosporinas', doseCao: '20-30 mg/kg', doseGato: '15-20 mg/kg', doseOutros: '—', via: 'VO', frequencia: '2-3x ao dia', tempoPtto: '7–21 dias', efeitosAdversos: 'Diarreia, vômito', interacoes: 'Aminoglicosídeos (toxicidade renal)', observacoes: 'Primeira escolha para piodermites', foto: null },
-  { id: 'b04', categoria: 'Antibióticos', nomeComercial: 'Enroxil', nomeGenerico: 'Enrofloxacino', fabricante: 'KRKA', apresentacao: 'Comprimidos 50mg / 150mg', concentracao: '50 / 150 mg', indicacoes: 'Infecções urinárias, respiratórias, dérmicas por gram-negativos', contraindicacoes: 'Filhotes em crescimento, epiléticos', doseCao: '5-20 mg/kg', doseGato: '5 mg/kg (máx.)', doseOutros: 'Aves: 10-20 mg/kg', via: 'VO / IM', frequencia: '1-2x ao dia', tempoPtto: '7–14 dias', efeitosAdversos: 'Degeneração retiniana em gatos (doses altas), convulsões', interacoes: 'AINEs, antiácidos', observacoes: 'Evitar luz solar intensa durante tratamento', foto: null },
-  { id: 'b05', categoria: 'Antibióticos', nomeComercial: 'Doxitrat', nomeGenerico: 'Doxiciclina', fabricante: 'Ourofino', apresentacao: 'Comprimidos 50mg / 100mg', concentracao: '50 / 100 mg', indicacoes: 'Erliquiose, ricketsiose, micoplasma, clamídia, leptospirose', contraindicacoes: 'Gestantes, animais jovens', doseCao: '5-10 mg/kg', doseGato: '5 mg/kg', doseOutros: 'Aves: 25-50 mg/kg', via: 'VO', frequencia: '2x ao dia', tempoPtto: '21–28 dias (erliquiose)', efeitosAdversos: 'Esofagite (gatos), fotossensibilidade', interacoes: 'Antiácidos, cálcio (quelação)', observacoes: 'Administrar com água ou alimento úmido; não deitar após a dose', foto: null },
-  { id: 'b06', categoria: 'Analgésicos/Anti-inflamatórios', nomeComercial: 'Previcox', nomeGenerico: 'Firocoxibe', fabricante: 'Boehringer', apresentacao: 'Comprimidos 57mg / 227mg', concentracao: '57 / 227 mg', indicacoes: 'Dor e inflamação em osteoartrite, pós-operatório', contraindicacoes: 'Gatos (NÃO USAR), insuficiência renal/hepática', doseCao: '5 mg/kg', doseGato: 'Contraindicado', doseOutros: '—', via: 'VO', frequencia: '1x ao dia', tempoPtto: 'Conforme necessidade clínica', efeitosAdversos: 'Úlcera gástrica, insuficiência renal', interacoes: 'Corticoides, outros AINEs', observacoes: 'Dar com alimento; monitorar função renal', foto: null },
-  { id: 'b07', categoria: 'Analgésicos/Anti-inflamatórios', nomeComercial: 'Metacam', nomeGenerico: 'Meloxicam', fabricante: 'Boehringer', apresentacao: 'Solução oral 1,5 mg/mL; injetável 5 mg/mL', concentracao: '1,5 / 5 mg/mL', indicacoes: 'Dor aguda e crônica, inflamação, pós-cirúrgico', contraindicacoes: 'Insuficiência renal/hepática grave, gestação', doseCao: '0,2 mg/kg (1ª dose) → 0,1 mg/kg/dia', doseGato: '0,1 mg/kg dose única SC; oral longo prazo: 0,025 mg/kg', doseOutros: 'Aves: 0,5-1 mg/kg', via: 'VO / SC', frequencia: '1x ao dia', tempoPtto: 'Curto prazo (agudo); crônico com monitoração', efeitosAdversos: 'Distúrbios GI, nefrotoxicidade', interacoes: 'Outros AINEs, corticoides, diuréticos', observacoes: 'Melhor AINE disponível para gatos sob prescrição controlada', foto: null },
-  { id: 'b08', categoria: 'Analgésicos/Anti-inflamatórios', nomeComercial: 'Tramal Vet', nomeGenerico: 'Tramadol', fabricante: 'Grünenthal', apresentacao: 'Comprimidos 50mg; injetável 50mg/mL', concentracao: '50 mg', indicacoes: 'Dor moderada a severa, pós-operatório', contraindicacoes: 'Epilepsia, uso com IMAO', doseCao: '2-5 mg/kg', doseGato: '2-4 mg/kg', doseOutros: '—', via: 'VO / SC / IM / IV', frequencia: '2-3x ao dia (8-12h)', tempoPtto: 'Conforme prescrição', efeitosAdversos: 'Sedação, vômito, disfonese', interacoes: 'IMAOs, SSRIs, depressores do SNC', observacoes: 'Uso controlado (lista C1 ANVISA)', foto: null },
-  { id: 'b09', categoria: 'Corticoides', nomeComercial: 'Prednisolona 20mg', nomeGenerico: 'Prednisolona', fabricante: 'Genérico', apresentacao: 'Comprimidos 5mg / 20mg', concentracao: '5 / 20 mg', indicacoes: 'Processos alérgicos, doenças autoimunes, choque', contraindicacoes: 'Infecções fúngicas sistêmicas, animais infectados', doseCao: 'Imunossupressão: 2-4 mg/kg; anti-inflamatório: 0,5-2 mg/kg', doseGato: '1-3 mg/kg', doseOutros: '—', via: 'VO', frequencia: '1x ao dia (manhã)', tempoPtto: 'Desmame gradual', efeitosAdversos: 'PU/PD/PF, imunossupressão, Cushing iatrogênico', interacoes: 'AINEs (úlcera), vacinas atenuadas', observacoes: 'Nunca cessar abruptamente; desmame gradual', foto: null },
-  { id: 'b10', categoria: 'Corticoides', nomeComercial: 'Dexametasona 2mg/mL', nomeGenerico: 'Dexametasona', fabricante: 'Genérico', apresentacao: 'Solução injetável 2mg/mL', concentracao: '2 mg/mL', indicacoes: 'Choque, edema cerebral, doenças alérgicas agudas', contraindicacoes: 'Infecções virais, sistêmicas', doseCao: '0,1-0,5 mg/kg', doseGato: '0,1-0,25 mg/kg', doseOutros: 'Aves: 0,4-2 mg/kg', via: 'IV / IM / SC', frequencia: 'Dose única ou conforme protocolo', tempoPtto: 'Curto prazo', efeitosAdversos: 'Imunossupressão intensa, hiperglicemia', interacoes: 'AINEs, insulina', observacoes: '6-10x mais potente que prednisolona; preferir IM/IV', foto: null },
-  { id: 'b11', categoria: 'Gastroentérologia', nomeComercial: 'Omeprazol Vet', nomeGenerico: 'Omeprazol', fabricante: 'Genérico', apresentacao: 'Cápsulas 20mg', concentracao: '20 mg', indicacoes: 'Úlcera gástrica, refluxo, profilaxia com corticoides', contraindicacoes: 'Hipersensibilidade', doseCao: '0,7-1 mg/kg', doseGato: '0,7 mg/kg', doseOutros: '—', via: 'VO', frequencia: '1x ao dia (jejum)', tempoPtto: '4–8 semanas', efeitosAdversos: 'Raro: diarreia, náusea', interacoes: 'Reduz absorção de itraconazol, cetoconazol', observacoes: 'Administrar 30 min antes da alimentação; não mastigar a cápsula', foto: null },
-  { id: 'b12', categoria: 'Gastroentérologia', nomeComercial: 'Cerenia', nomeGenerico: 'Maropitant', fabricante: 'Zoetis', apresentacao: 'Comprimidos 16mg / 24mg / 60mg; injetável 10mg/mL', concentracao: '16/24/60 mg; 10mg/mL', indicacoes: 'Vômito agudo, enjoo de movimento, náusea pré-anestésica', contraindicacoes: 'Filhotes <16 semanas (comp)', doseCao: '2 mg/kg SC, 8 mg/kg VO', doseGato: '1 mg/kg SC', doseOutros: '—', via: 'SC / VO', frequencia: '1x ao dia', tempoPtto: '5 dias (máx. contínuo)', efeitosAdversos: 'Salivação, dor no local (SC)', interacoes: 'Inibidores de CYP3A4', observacoes: 'SC causa dor; refrigerar injetável; boa opção pré-cirúrgica', foto: null },
-  { id: 'b13', categoria: 'Gastroentérologia', nomeComercial: 'Metronidazol Vet', nomeGenerico: 'Metronidazol', fabricante: 'Genérico', apresentacao: 'Comprimidos 250mg / 400mg; IV 5mg/mL', concentracao: '250/400 mg', indicacoes: 'Giardíase, anaerobiose, diarreia inflamatória', contraindicacoes: 'Gestantes (1° trimestre), neuropatias', doseCao: '10-25 mg/kg', doseGato: '10-15 mg/kg', doseOutros: 'Répteis: 25-40 mg/kg', via: 'VO / IV', frequencia: '2x ao dia', tempoPtto: '5–7 dias (giárdia: 5 dias)', efeitosAdversos: 'Neurotoxicidade (doses altas), gosto amargo', interacoes: 'Varfarina, fenobarbital', observacoes: 'Sabor amargo intenso — usar comprimido inteiro', foto: null },
-  { id: 'b14', categoria: 'Cardiovascular', nomeComercial: 'Vetmedin', nomeGenerico: 'Pimobendan', fabricante: 'Boehringer', apresentacao: 'Comprimidos mastigáveis 1,25mg / 2,5mg / 5mg', concentracao: '1,25 / 2,5 / 5 mg', indicacoes: 'Insuficiência cardíaca congestiva por cardiomiopatia dilatada ou doença valvar mitral', contraindicacoes: 'Estenose aórtica/pulmonar, obstrução do fluxo', doseCao: '0,2-0,3 mg/kg', doseGato: 'Uso off-label: 1,25 mg/gato 2x/dia', doseOutros: '—', via: 'VO', frequencia: '2x ao dia (12/12h — 1h antes do alimento)', tempoPtto: 'Uso contínuo', efeitosAdversos: 'Taquicardia, anorexia', interacoes: 'Bloqueadores de cálcio', observacoes: 'Administrar com estômago vazio para melhor absorção', foto: null },
-  { id: 'b15', categoria: 'Cardiovascular', nomeComercial: 'Furosemida Vet', nomeGenerico: 'Furosemida', fabricante: 'Genérico', apresentacao: 'Comprimidos 40mg; injetável 10mg/mL', concentracao: '40 mg / 10 mg/mL', indicacoes: 'Edema pulmonar, ascite, insuficiência cardíaca', contraindicacoes: 'Anúria, hipocalemia severa', doseCao: '1-4 mg/kg', doseGato: '1-2 mg/kg', doseOutros: '—', via: 'VO / IM / IV', frequencia: '1-3x ao dia', tempoPtto: 'Uso contínuo (crônico); emergência: IV lento', efeitosAdversos: 'Hipocalemia, desidratação, azotemia', interacoes: 'Aminoglicosídeos (nefrotoxicidade), digoxina', observacoes: 'Monitorar eletrólitos e função renal periodicamente', foto: null },
-  { id: 'b16', categoria: 'Neurológico', nomeComercial: 'Fenobarbital Vet', nomeGenerico: 'Fenobarbital', fabricante: 'Genérico', apresentacao: 'Comprimidos 100mg; injetável 40mg/mL', concentracao: '100 mg / 40 mg/mL', indicacoes: 'Epilepsia idiopática, convulsões', contraindicacoes: 'Hepatopatia grave', doseCao: '2-4 mg/kg', doseGato: '2 mg/kg', doseOutros: '—', via: 'VO / IV', frequencia: '2x ao dia', tempoPtto: 'Uso contínuo (não cessar abruptamente)', efeitosAdversos: 'Sedação inicial, PU/PD/PF, hepatotoxicidade crônica', interacoes: 'Inúmeras (indutor enzimático P450)', observacoes: 'Monitorar fenobarbitalemia e perfil hepático a cada 6 meses; lista C5', foto: null },
-  { id: 'b17', categoria: 'Neurológico', nomeComercial: 'Keppra Vet', nomeGenerico: 'Levetiracetam', fabricante: 'Genérico', apresentacao: 'Comprimidos 250mg / 500mg / 750mg', concentracao: '250/500/750 mg', indicacoes: 'Epilepsia refratária, adjuvante ao fenobarbital', contraindicacoes: 'Hipersensibilidade', doseCao: '20 mg/kg', doseGato: '20 mg/kg', doseOutros: '—', via: 'VO', frequencia: '3x ao dia (8/8h)', tempoPtto: 'Uso contínuo', efeitosAdversos: 'Sedação, ataxia transitória', interacoes: 'Poucas — bom para polifarmácia', observacoes: 'Boa tolerabilidade; sem necessidade de monitoração hepática rotineira', foto: null },
-  { id: 'b18', categoria: 'Dermatológico', nomeComercial: 'Apoquel', nomeGenerico: 'Oclacitinibe', fabricante: 'Zoetis', apresentacao: 'Comprimidos 3,6mg / 5,4mg / 16mg', concentracao: '3,6 / 5,4 / 16 mg', indicacoes: 'Prurido associado a dermatite alérgica em cães', contraindicacoes: 'Gatos (off-label apenas), imunodeprimidos, menores de 12 meses', doseCao: '0,4-0,6 mg/kg', doseGato: 'Off-label: 0,5-1 mg/kg', doseOutros: '—', via: 'VO', frequencia: '2x ao dia (início 14 dias) → 1x ao dia (manutenção)', tempoPtto: 'Uso contínuo', efeitosAdversos: 'Infecções oportunistas, neoplasias (uso crônico)', interacoes: 'Imunossupressores', observacoes: 'Início de ação rápido (4h); não usar com corticoides a longo prazo', foto: null },
-  { id: 'b19', categoria: 'Dermatológico', nomeComercial: 'Cytopoint', nomeGenerico: 'Lokivetmab', fabricante: 'Zoetis', apresentacao: 'Solução injetável 10mg/mL', concentracao: '10 mg/mL', indicacoes: 'Dermatite atópica em cães', contraindicacoes: 'Gatos (não aprovado)', doseCao: '2 mg/kg SC', doseGato: 'Não aprovado', doseOutros: '—', via: 'SC', frequencia: '1x ao mês (ou a cada 4-8 semanas)', tempoPtto: 'Uso crônico conforme necessidade', efeitosAdversos: 'Raro: reação no local, letargia transitória', interacoes: 'Seguro com outros fármacos', observacoes: 'Anticorpo monoclonal; refrigerar 2-8°C; excelente tolerabilidade', foto: null },
-  { id: 'b20', categoria: 'Antiparasitários', nomeComercial: 'Simparic', nomeGenerico: 'Sarolaner', fabricante: 'Zoetis', apresentacao: 'Comprimidos mastigáveis 5mg/10mg/20mg/40mg/80mg/120mg', concentracao: '5-120 mg', indicacoes: 'Pulgas e carrapatos (adultos e larvas)', contraindicacoes: 'Filhotes < 6 meses ou < 1,3 kg; MDR1/ABCB1 mutação', doseCao: '2 mg/kg', doseGato: 'Não aprovado', doseOutros: '—', via: 'VO', frequencia: '1x ao mês', tempoPtto: 'Uso contínuo', efeitosAdversos: 'Raro: vômito, diarreia, tremores (Collies MDR1+)', interacoes: 'Macrolídeos (cautela em raças sensíveis)', observacoes: 'Ação rápida contra pulgas (3h); manter uso mensal preventivo', foto: null },
-  { id: 'b21', categoria: 'Antiparasitários', nomeComercial: 'Bravecto', nomeGenerico: 'Fluralaner', fabricante: 'MSD', apresentacao: 'Comprimidos mastigáveis / solução spot-on', concentracao: 'Variadas', indicacoes: 'Pulgas e carrapatos por 12 semanas', contraindicacoes: 'Filhotes < 6 meses', doseCao: '25-56 mg/kg', doseGato: 'Spot-on 280mg (>6meses, >1,2kg)', doseOutros: '—', via: 'VO / Tópico', frequencia: '1x a cada 12 semanas', tempoPtto: 'Uso contínuo', efeitosAdversos: 'Vômito, diarreia (raro)', interacoes: 'Baixas interações conhecidas', observacoes: 'Praticidade de dose trimestral; preferir ingestão com alimento', foto: null },
-  { id: 'b22', categoria: 'Antiparasitários', nomeComercial: 'Drontal Plus', nomeGenerico: 'Praziquantel + Pamoato de Pirantel + Febantel', fabricante: 'Bayer', apresentacao: 'Comprimidos para cão', concentracao: 'Combinado', indicacoes: 'Ascarídeos, ancilostomídeos, tricúreos, tênias', contraindicacoes: 'Filhotes < 2 semanas', doseCao: '1 comp/10 kg', doseGato: 'Drontal Gato (fórmula específica)', doseOutros: '—', via: 'VO', frequencia: 'Dose única (repetir em 3 semanas se necessário)', tempoPtto: 'Dose única', efeitosAdversos: 'Vômito, salivação (raro)', interacoes: 'Baixas', observacoes: 'Vermifugar filhotes a partir de 2 semanas de vida', foto: null },
-  { id: 'b23', categoria: 'Anestésicos', nomeComercial: 'Cetamina 10%', nomeGenerico: 'Cetamina', fabricante: 'Cristália', apresentacao: 'Solução injetável 10% (100mg/mL)', concentracao: '100 mg/mL', indicacoes: 'Indução anestésica, anestesia dissociativa', contraindicacoes: 'Hipertensão, insuficiência cardíaca, convulsões', doseCao: 'Indução: 5-10 mg/kg IM; TIVA: 5-10 mg/kg/h IV', doseGato: 'Indução: 10-20 mg/kg IM', doseOutros: 'Aves: 10-30 mg/kg IM', via: 'IM / IV', frequencia: 'Conforme protocolo', tempoPtto: 'Intraoperatório', efeitosAdversos: 'Hipersalivação, aumento de tônus muscular, alucinações', interacoes: 'Benzodiazepínicos (agonismo), AINEs', observacoes: 'Sempre associar a agentes sedativos (midazolam, acepromazina) para reduzir efeitos excitatórios', foto: null },
-  { id: 'b24', categoria: 'Anestésicos', nomeComercial: 'Propofol 1%', nomeGenerico: 'Propofol', fabricante: 'Cristália/Fresenius', apresentacao: 'Emulsão IV 10mg/mL', concentracao: '10 mg/mL', indicacoes: 'Indução anestésica e TIVA', contraindicacoes: 'Sem acesso venoso, hiperlipidemia grave', doseCao: 'Indução: 4-6 mg/kg IV lento; manutenção: 0,1-0,4 mg/kg/min', doseGato: '4-8 mg/kg IV lento', doseOutros: '—', via: 'IV', frequencia: 'Conforme protocolo', tempoPtto: 'Intraoperatório', efeitosAdversos: 'Apneia, hipotensão, dor na infusão', interacoes: 'Opioides (reduzem dose), benzodiazepínicos', observacoes: 'Emulsão lipídica — usar dentro de 6h após abertura; não usar com tubo ou material rígido. Refrigerar.', foto: null },
-]
-
 export default function BularioPage() {
   const { hasRole } = useAuth()
-  const [bulario, setBulario] = usePersistentState('petvet-bulario', INITIAL_BULARIO)
+
+  const [storedBulario, setStoredBulario] = usePersistentState('petvet-bulario', BULARIO_INICIAL)
+  const bulario = useMemo(() => {
+    if (!Array.isArray(storedBulario) || storedBulario.length < 260) return BULARIO_INICIAL
+    return storedBulario
+  }, [storedBulario])
+
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('Todas')
   const [selected, setSelected] = useState(null)
@@ -58,6 +44,14 @@ export default function BularioPage() {
   const [cropSrc, setCropSrc] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem('petvet-bulario') || '[]')
+    if (!Array.isArray(stored) || stored.length < 260) {
+localStorage.setItem('petvet-bulario', JSON.stringify(BULARIO_INICIAL))
+      setStoredBulario(BULARIO_INICIAL)
+      syncToSupabase('petvet-bulario', BULARIO_INICIAL)
+    }
+  }, []) // eslint-disable-line
 
   const filtered = bulario
     .filter(m => {
@@ -78,10 +72,11 @@ export default function BularioPage() {
   function save() {
     if (!form.nomeComercial) return
     const sort = arr => [...arr].sort((a, b) => a.nomeComercial.localeCompare(b.nomeComercial, 'pt-BR'))
+    // Usa bulario (derivado via useMemo) como base — nunca parte de lista incompleta
     if (editing) {
-      setBulario(prev => sort(prev.map(m => m.id === editing.id ? { ...form, id: editing.id } : m)))
+      setStoredBulario(sort(bulario.map(m => m.id === editing.id ? { ...form, id: editing.id } : m)))
     } else {
-      setBulario(prev => sort([...prev, { ...form, id: `b${Date.now()}` }]))
+      setStoredBulario(sort([...bulario, { ...form, id: `b${Date.now()}` }]))
     }
     setShowForm(false)
   }
@@ -138,7 +133,7 @@ export default function BularioPage() {
               ['Dose — Outros', selected.doseOutros],
               ['Via de administração', selected.via],
               ['Frequência', selected.frequencia],
-              ['Tempo de tratamento', selected.tempoPtto],
+              ['Tempo de tratamento', selected.duracao || selected.tempoPtto],
               ['Efeitos adversos', selected.efeitosAdversos],
               ['Interações', selected.interacoes],
               ['Observações', selected.observacoes],
@@ -243,7 +238,7 @@ export default function BularioPage() {
           </div>
           <div className="form-group">
             <label className="form-label">Tempo de tratamento</label>
-            <input className="form-input" value={form.tempoPtto} onChange={e => setForm(f => ({ ...f, tempoPtto: e.target.value }))} placeholder="Ex: 7–14 dias" />
+            <input className="form-input" value={form.duracao} onChange={e => setForm(f => ({ ...f, duracao: e.target.value }))} placeholder="Ex: 7–14 dias" />
           </div>
           <div className="form-group" style={{ gridColumn: 'span 2' }}>
             <label className="form-label">Efeitos adversos</label>
@@ -277,7 +272,7 @@ export default function BularioPage() {
       )}
 
       <ConfirmModal isOpen={!!deleteTarget} onClose={() => setDeleteTarget(null)}
-        onConfirm={() => { setBulario(prev => prev.filter(m => m.id !== deleteTarget.id)); setDeleteTarget(null) }}
+        onConfirm={() => { setStoredBulario(bulario.filter(m => m.id !== deleteTarget.id)); setDeleteTarget(null) }}
         message={`Excluir "${deleteTarget?.nomeComercial}" do bulário? Esta ação não pode ser desfeita.`} />
     </div>
   )

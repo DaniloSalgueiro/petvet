@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, Users, Calendar, ShoppingCart,
   MoreHorizontal, FileText, Package, Scissors,
-  DollarSign, Syringe, Pill, BarChart2,
+  DollarSign, Syringe, Pill, BarChart2, Calculator,
   UserCog, Briefcase, Tag, Settings, X, LogOut,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -18,10 +18,12 @@ const MORE_NAV = [
   { id: 'prontuario',      label: 'Prontuário', icon: FileText },
   { id: 'estoque',         label: 'Estoque',    icon: Package },
   { id: 'servicos',        label: 'Serviços',   icon: Scissors },
-  { id: 'financeiro',      label: 'Financeiro', icon: DollarSign },
-  { id: 'vacinaprotocolo', label: 'Vacinas',    icon: Syringe },
-  { id: 'bulario',         label: 'Bulário',    icon: Pill },
-  { id: 'relatorios',      label: 'Relatórios', icon: BarChart2 },
+  { id: 'financeiro',      label: 'Financeiro',   icon: DollarSign },
+  { id: 'contabilidade',   label: 'Contabilidade',icon: Calculator },
+  { id: 'crm',             label: 'CRM',          icon: Users },
+  { id: 'vacinaprotocolo', label: 'Vacinas',      icon: Syringe },
+  { id: 'bulario',         label: 'Bulário',      icon: Pill },
+  { id: 'relatorios',      label: 'Relatórios',   icon: BarChart2 },
 ]
 
 const ADMIN_MORE = [

@@ -25,15 +25,16 @@ export default function Login() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('petvet-credentials')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (parsed.email) setEmail(parsed.email)
-        // senha nunca é restaurada — campo sempre inicia vazio
-        if (parsed.password) {
-          // migra credenciais antigas: remove senha salva
-          localStorage.setItem('petvet-credentials', JSON.stringify({ email: parsed.email }))
-        }
+      // Migra formato antigo para o novo (remove chave legada)
+      if (localStorage.getItem('petvet-credentials')) {
+        localStorage.removeItem('petvet-credentials')
+      }
+      const active    = localStorage.getItem('petvet-remember-active')
+      const savedEmail = localStorage.getItem('petvet-remember-email')
+      const savedSenha = localStorage.getItem('petvet-remember-senha')
+      if (active === 'true' && savedEmail) {
+        setEmail(savedEmail)
+        setPassword(savedSenha || '')
         setRememberMe(true)
       }
     } catch {}
@@ -43,9 +44,13 @@ export default function Login() {
     e.preventDefault()
     setError('')
     if (rememberMe) {
-      localStorage.setItem('petvet-credentials', JSON.stringify({ email }))
+      localStorage.setItem('petvet-remember-email',  email)
+      localStorage.setItem('petvet-remember-senha',  password)
+      localStorage.setItem('petvet-remember-active', 'true')
     } else {
-      localStorage.removeItem('petvet-credentials')
+      localStorage.removeItem('petvet-remember-email')
+      localStorage.removeItem('petvet-remember-senha')
+      localStorage.removeItem('petvet-remember-active')
     }
     const ok = await login(email, password)
     if (!ok) setError('E-mail ou senha inválidos.')
@@ -108,7 +113,7 @@ export default function Login() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              autoComplete="new-password"
+              autoComplete="current-password"
             />
           </div>
 

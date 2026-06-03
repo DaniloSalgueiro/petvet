@@ -22,12 +22,30 @@ const SYNC_KEYS = [
   'petvet-identidade',
   'petvet-followup-queue',
   'petvet-passwords',
+  'petvet-config-fiscal',
+  'petvet-plano-contas',
+  'petvet-saldo-inicial',
+  'petvet-centro-custos',
+  'petvet-contas-bancarias',
+  'petvet-extrato-bancario',
+  'petvet-impostos-hist',
+  'petvet-relatorio-contador-hist',
+  'petvet-crm-config',
+  'petvet-crm-contatos',
 ]
+
+function isEmptyValue(val) {
+  if (val === null || val === undefined) return true
+  if (Array.isArray(val)) return val.length === 0
+  if (typeof val === 'object') return Object.keys(val).length === 0
+  return false
+}
 
 /**
  * Busca TODAS as chaves de uma vez do Supabase e atualiza o localStorage.
- * Uma única query em vez de N queries individuais.
- * @returns {{ [key: string]: any }} mapa com os valores encontrados
+ * Bidirecional: chaves presentes no localStorage mas ausentes no Supabase
+ * são salvas no Supabase em um único upsert em lote.
+ * @returns {{ [key: string]: any }} mapa com os valores encontrados no Supabase
  */
 export async function loadAll() {
   try {
@@ -37,15 +55,39 @@ export async function loadAll() {
       .in('key', SYNC_KEYS)
 
     if (error) throw error
-    if (!data || data.length === 0) return {}
 
+    // Atualiza localStorage com dados do Supabase
+    const foundKeys = new Set()
     const result = {}
-    for (const row of data) {
+    for (const row of (data || [])) {
       result[row.key] = row.value
+      foundKeys.add(row.key)
       try { localStorage.setItem(row.key, JSON.stringify(row.value)) } catch {}
     }
 
-    console.log(`[PetVet] loadAll: ${data.length}/${SYNC_KEYS.length} chaves carregadas do Supabase`)
+    // Chaves ausentes no Supabase mas presentes no localStorage → upsert em lote
+    const missingRows = []
+    for (const key of SYNC_KEYS) {
+      if (foundKeys.has(key)) continue
+      const raw = localStorage.getItem(key)
+      if (raw === null) continue
+      try {
+        const value = JSON.parse(raw)
+        if (!isEmptyValue(value)) {
+          missingRows.push({ key, value, updated_at: new Date().toISOString() })
+        }
+      } catch {}
+    }
+
+    if (missingRows.length > 0) {
+      await supabase
+        .from('app_state')
+        .upsert(missingRows, { onConflict: 'key' })
+        .catch(e => console.warn('[PetVet] loadAll upsert missing:', e.message))
+      console.log(`[PetVet] loadAll: ${missingRows.length} chave(s) do localStorage salvas no Supabase`)
+    }
+
+    console.log(`[PetVet] loadAll: ${(data || []).length}/${SYNC_KEYS.length} chaves carregadas do Supabase`)
     return result
   } catch (e) {
     console.warn('[PetVet] loadAll erro:', e.message)

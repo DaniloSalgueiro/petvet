@@ -26,6 +26,8 @@ import RacasPage from './pages/Racas'
 import BularioPage from './pages/Bulario'
 import RelatoriosPage from './pages/Relatorios'
 import ConfiguracoesPage from './pages/Configuracoes'
+import ContabilidadePage from './pages/Contabilidade'
+import CRMPage from './pages/CRM'
 
 function AppShell() {
   const { user, mustChangePassword } = useAuth()
@@ -63,6 +65,7 @@ const PAGE_NAMES = {
   usuarios: 'Usuários', pdv: 'PDV', vacinaprotocolo: 'Vacinas',
   funcionarios: 'Funcionários', 'prontuario-config': 'Config. Prontuário',
   racas: 'Raças', bulario: 'Bulário', relatorios: 'Relatórios',
+  contabilidade: 'Contabilidade', crm: 'CRM',
 }
 
 function getPlano() {
@@ -107,6 +110,8 @@ function PageRouter({ page, navParams, navigateTo }) {
     case 'bulario':           return <BularioPage />
     case 'relatorios':        return <RelatoriosPage />
     case 'configuracoes':     return <ConfiguracoesPage />
+    case 'contabilidade':     return <ContabilidadePage />
+    case 'crm':               return <CRMPage />
     default:                  return <Dashboard navigateTo={navigateTo} />
   }
 }
@@ -135,15 +140,19 @@ export default function App() {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  // Carga inicial: traz todos os dados do Supabase de uma vez (1 query)
+  // Carga inicial: traz todos os dados do Supabase (bidirecional — 2 queries total)
   useEffect(() => {
+    window.dispatchEvent(new CustomEvent('petvet-sync', { detail: { status: 'syncing' } }))
     loadAll()
+      .then(() => window.dispatchEvent(new CustomEvent('petvet-sync', { detail: { status: 'synced' } })))
+      .catch(() => window.dispatchEvent(new CustomEvent('petvet-sync', { detail: { status: 'error' } })))
   }, [])
 
-  // Sincronização periódica dos dados críticos a cada 30s.
+  // Sincronização periódica dos dados críticos a cada 60s.
   // Dispara evento supabase-sync quando detecta mudança para atualizar useCloudState.
   useEffect(() => {
     const interval = setInterval(async () => {
+      window.dispatchEvent(new CustomEvent('petvet-sync', { detail: { status: 'syncing' } }))
       for (const key of CRITICAL_KEYS) {
         const result = await loadFromSupabase(key)
         if (!result.ok || result.data === null) continue
@@ -154,7 +163,8 @@ export default function App() {
           window.dispatchEvent(new CustomEvent('supabase-sync', { detail: { key } }))
         }
       }
-    }, 30000)
+      window.dispatchEvent(new CustomEvent('petvet-sync', { detail: { status: 'synced' } }))
+    }, 60000)
 
     return () => clearInterval(interval)
   }, [])

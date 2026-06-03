@@ -1,19 +1,29 @@
-import { useEffect, useRef } from 'react'
-import { Sun, Moon, Bell, X, MessageCircle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Sun, Moon, Bell, X, MessageCircle, Cloud, CloudOff } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 import { useFollowup } from '../context/FollowupContext'
 import { useAuth } from '../context/AuthContext'
 import InstallPWA from './InstallPWA'
 
 const PAGE_TITLES = {
-  dashboard:  'Dashboard',
-  pets:       'Pets & Tutores',
-  prontuario: 'Prontuário',
-  agenda:     'Agenda',
-  estoque:    'Estoque',
-  servicos:   'Serviços',
-  financeiro: 'Financeiro',
-  usuarios:   'Gestão de Usuários',
+  dashboard:        'Dashboard',
+  pets:             'Pets & Tutores',
+  prontuario:       'Prontuário',
+  agenda:           'Agenda',
+  estoque:          'Estoque',
+  servicos:         'Serviços',
+  financeiro:       'Financeiro',
+  usuarios:         'Gestão de Usuários',
+  pdv:              'PDV — Ponto de Venda',
+  vacinaprotocolo:  'Vacinas',
+  funcionarios:     'Funcionários',
+  'prontuario-config': 'Config. Prontuário',
+  racas:            'Raças',
+  bulario:          'Bulário',
+  relatorios:       'Relatórios',
+  configuracoes:    'Configurações',
+  contabilidade:    'Contabilidade',
+  crm:              'CRM — Clientes',
 }
 
 function elapsed(isoStr) {
@@ -24,11 +34,34 @@ function elapsed(isoStr) {
   return `${h}h${min % 60 > 0 ? ` ${min % 60}min` : ''} atrás`
 }
 
+const SYNC_CONFIG = {
+  syncing: { color: '#d69e2e', title: 'Sincronizando dados...',     icon: 'cloud' },
+  synced:  { color: '#38a169', title: 'Dados sincronizados',        icon: 'cloud' },
+  error:   { color: '#e53e3e', title: 'Erro de sincronização',      icon: 'off'   },
+  offline: { color: '#718096', title: 'Sem conexão (modo offline)', icon: 'off'   },
+}
+
 export default function Header({ currentPage, actions }) {
   const { theme, toggleTheme } = useTheme()
   const { user } = useAuth()
   const { pendentes, showPanel, setShowPanel, enviarWhatsApp } = useFollowup()
   const panelRef = useRef(null)
+  const [syncStatus, setSyncStatus] = useState('synced')
+  const syncTimerRef = useRef(null)
+
+  useEffect(() => {
+    function onSync(e) {
+      const status = e.detail?.status ?? 'synced'
+      setSyncStatus(status)
+      clearTimeout(syncTimerRef.current)
+      if (status === 'synced') {
+        // Volta a 'synced' visível por 3s depois some (fica muted)
+        syncTimerRef.current = setTimeout(() => setSyncStatus('idle'), 3000)
+      }
+    }
+    window.addEventListener('petvet-sync', onSync)
+    return () => { window.removeEventListener('petvet-sync', onSync); clearTimeout(syncTimerRef.current) }
+  }, [])
 
   useEffect(() => {
     if (!showPanel) return
@@ -154,6 +187,23 @@ export default function Header({ currentPage, actions }) {
             </div>
           )}
         </div>
+
+        {syncStatus !== 'idle' && (() => {
+          const cfg = SYNC_CONFIG[syncStatus] ?? SYNC_CONFIG.synced
+          return (
+            <div
+              title={cfg.title}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: 32, height: 32, borderRadius: 8, color: cfg.color,
+                transition: 'color 0.3s',
+                animation: syncStatus === 'syncing' ? 'petvet-pulse 1s ease-in-out infinite' : 'none',
+              }}
+            >
+              {cfg.icon === 'off' ? <CloudOff size={16} /> : <Cloud size={16} />}
+            </div>
+          )
+        })()}
 
         <button
           className="btn btn-ghost btn-icon"

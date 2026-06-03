@@ -9,9 +9,18 @@ import { supabase } from '../lib/supabase'
  * Comportamento:
  * 1. Inicializa do localStorage instantaneamente (sem flash)
  * 2. Busca do Supabase em background e atualiza se houver dados
- * 3. Salva no Supabase com debounce de 800ms a cada mudança de estado
- * 4. Sempre mantém o localStorage atualizado como cache offline
+ * 3. Se Supabase estiver vazio mas há dados locais: salva no Supabase imediatamente
+ * 4. Salva no Supabase com debounce de 800ms a cada mudança de estado
+ * 5. Sempre mantém o localStorage atualizado como cache offline
  */
+
+function isEmptyValue(val) {
+  if (val === null || val === undefined) return true
+  if (Array.isArray(val)) return val.length === 0
+  if (typeof val === 'object') return Object.keys(val).length === 0
+  return false
+}
+
 export function useCloudState(key, initialValue) {
   // Inicialização síncrona do localStorage — render imediato sem esperar Supabase
   const [state, setState] = useState(() => {
@@ -28,6 +37,9 @@ export function useCloudState(key, initialValue) {
   const saveTimerRef  = useRef(null)
   const isInitialRef  = useRef(true)   // true até o primeiro efeito de save passar
   const fromCloudRef  = useRef(false)  // true quando setState veio do Supabase
+  const stateRef      = useRef(state)  // sempre reflete o valor mais recente
+
+  useEffect(() => { stateRef.current = state }, [state])
 
   // ── Escuta evento de sync periódico do App.jsx ────────────────────────────
   useEffect(() => {
@@ -57,9 +69,20 @@ export function useCloudState(key, initialValue) {
       .then(({ data, error }) => {
         if (!mountedRef.current) return
         if (!error && data?.value !== undefined && data.value !== null) {
+          // Supabase tem dados: atualiza React + localStorage
           fromCloudRef.current = true
           setState(data.value)
           try { localStorage.setItem(key, JSON.stringify(data.value)) } catch {}
+        } else if (!error) {
+          // Supabase conectado mas sem dados para esta chave:
+          // persiste o valor atual (localStorage ou initialValue) para outros dispositivos
+          const val = stateRef.current
+          if (!isEmptyValue(val)) {
+            supabase.from('app_state').upsert(
+              { key, value: val, updated_at: new Date().toISOString() },
+              { onConflict: 'key' }
+            ).catch(() => {})
+          }
         }
         setSyncStatus('synced')
       })

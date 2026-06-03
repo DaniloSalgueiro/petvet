@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { RotateCcw, Save, MessageCircle, History, Settings2, Trash2, Lock, Unlock } from 'lucide-react'
+import { RotateCcw, Save, MessageCircle, History, Settings2, Trash2, Lock, Unlock, Calculator } from 'lucide-react'
 import SSLogo from '../components/SSLogo'
 import { useIdentidade, DEFAULT_IDENTIDADE } from '../context/IdentidadeContext'
+import { useAuth } from '../context/AuthContext'
 import { DEFAULT_FOLLOWUP_CONFIG } from '../context/FollowupContext'
 import { syncToSupabase } from '../hooks/useSupabaseSync'
 import { uploadIconePWA } from '../lib/supabase'
@@ -67,6 +68,28 @@ const TEMPO_OPTIONS = [
   { value: 1440, label: '24 horas' },
 ]
 
+const FISCAL_KEY = 'petvet-config-fiscal'
+const DEFAULT_FISCAL = {
+  regimeTributario: 'simples', tipoAtividade: 'misto',
+  cnpj: '', inscricaoEstadual: '', inscricaoMunicipal: '', cnae: '',
+  aliquotaISS: 5, aliquotaICMS: 12, aliquotaPIS: 0.65,
+  aliquotaCOFINS: 3, aliquotaCSLL: 9, aliquotaIRPJ: 15,
+  emissaoNF: 'nao_emite', numContador: '',
+}
+function loadFiscalConfig() {
+  try { return { ...DEFAULT_FISCAL, ...JSON.parse(localStorage.getItem(FISCAL_KEY) ?? '{}') } }
+  catch { return { ...DEFAULT_FISCAL } }
+}
+function maskCNPJ(v) {
+  const d = v.replace(/\D/g, '').slice(0, 14)
+  return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+    .replace(/^(\d{2})(\d{3})(\d{3})(\d{4})$/, '$1.$2.$3/$4')
+    .replace(/^(\d{2})(\d{3})(\d{3})$/, '$1.$2.$3/')
+    .replace(/^(\d{2})(\d{3})$/, '$1.$2.')
+    .replace(/^(\d{2})$/, '$1.')
+}
+
+
 function loadFollowupConfig() {
   try { return { ...DEFAULT_FOLLOWUP_CONFIG, ...JSON.parse(localStorage.getItem(FOLLOWUP_KEY) ?? '{}') } }
   catch { return { ...DEFAULT_FOLLOWUP_CONFIG } }
@@ -82,6 +105,7 @@ function fmtDT(iso) {
 
 export default function ConfiguracoesPage() {
   const { identidade, setIdentidade, resetIdentidade } = useIdentidade()
+  const { hasRole } = useAuth()
   const [draft, setDraft] = useState(() => ({ ...identidade }))
   const [cropSrc, setCropSrc] = useState(null)
   const [cropField, setCropField] = useState(null)
@@ -107,6 +131,8 @@ export default function ConfiguracoesPage() {
   const [changePwdMsg, setChangePwdMsg] = useState('')
   const [ssCropSrc, setSsCropSrc] = useState(null)
   const ssLogoInputRef = useRef(null)
+  const [fiscalCfg, setFiscalCfg] = useState(loadFiscalConfig)
+  const [fiscalSaved, setFiscalSaved] = useState(false)
 
   // Ref para guardar a identidade salva mais recente (usada no cleanup)
   const savedRef = useRef(identidade)
@@ -246,6 +272,12 @@ export default function ConfiguracoesPage() {
     window.dispatchEvent(new Event('petvet-ss-updated'))
     setSsSaved(true)
     setTimeout(() => setSsSaved(false), 2500)
+  }
+
+  function handleSaveFiscal() {
+    localStorage.setItem(FISCAL_KEY, JSON.stringify(fiscalCfg))
+    setFiscalSaved(true)
+    setTimeout(() => setFiscalSaved(false), 2500)
   }
 
   function handleDevAuth() {
@@ -791,6 +823,146 @@ export default function ConfiguracoesPage() {
           </div>
         )}
       </div>
+
+      {/* Configurações Fiscais e Contábeis */}
+      {(hasRole('admin')) && (
+        <div className="card" style={{ padding: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+            <Calculator size={18} style={{ color: 'var(--teal)' }} />
+            <div>
+              <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', margin: 0 }}>
+                Configurações Fiscais e Contábeis
+              </p>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>Admin only — usado pelo módulo Contabilidade</p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* 1. Regime Tributário */}
+            <div>
+              <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 10 }}>1. Regime Tributário</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { val: 'mei',              label: 'MEI — Microempreendedor Individual' },
+                  { val: 'simples',          label: 'Simples Nacional' },
+                  { val: 'lucro_presumido',  label: 'Lucro Presumido' },
+                  { val: 'lucro_real',       label: 'Lucro Real' },
+                  { val: 'isento',           label: 'Isento / Sem fins lucrativos' },
+                ].map(opt => (
+                  <label key={opt.val} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <input type="radio" name="regime" value={opt.val}
+                      checked={fiscalCfg.regimeTributario === opt.val}
+                      onChange={() => setFiscalCfg(f => ({ ...f, regimeTributario: opt.val }))}/>
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Tipo de Atividade */}
+            <div>
+              <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 10 }}>2. Tipo de Atividade</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { val: 'servicos', label: 'Prestação de Serviços (ISS)' },
+                  { val: 'comercio', label: 'Comércio (ICMS)' },
+                  { val: 'misto',    label: 'Misto — Serviços + Comércio' },
+                ].map(opt => (
+                  <label key={opt.val} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <input type="radio" name="atividade" value={opt.val}
+                      checked={fiscalCfg.tipoAtividade === opt.val}
+                      onChange={() => setFiscalCfg(f => ({ ...f, tipoAtividade: opt.val }))}/>
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. Dados Fiscais */}
+            <div>
+              <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 10 }}>3. Dados Fiscais</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">CNPJ</label>
+                  <input className="form-input" value={fiscalCfg.cnpj}
+                    onChange={e => setFiscalCfg(f => ({ ...f, cnpj: maskCNPJ(e.target.value) }))}
+                    placeholder="00.000.000/0000-00" maxLength={18}/>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Inscrição Estadual</label>
+                  <input className="form-input" value={fiscalCfg.inscricaoEstadual}
+                    onChange={e => setFiscalCfg(f => ({ ...f, inscricaoEstadual: e.target.value }))}
+                    placeholder="Inscrição Estadual"/>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Inscrição Municipal</label>
+                  <input className="form-input" value={fiscalCfg.inscricaoMunicipal}
+                    onChange={e => setFiscalCfg(f => ({ ...f, inscricaoMunicipal: e.target.value }))}
+                    placeholder="Inscrição Municipal"/>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">CNAE (código da atividade)</label>
+                  <input className="form-input" value={fiscalCfg.cnae}
+                    onChange={e => setFiscalCfg(f => ({ ...f, cnae: e.target.value }))}
+                    placeholder="Ex: 7500-1/00"/>
+                </div>
+                {[
+                  { field: 'aliquotaISS',    label: 'Alíquota ISS %',    def: 5     },
+                  { field: 'aliquotaICMS',   label: 'Alíquota ICMS %',   def: 12    },
+                  { field: 'aliquotaPIS',    label: 'Alíquota PIS %',    def: 0.65  },
+                  { field: 'aliquotaCOFINS', label: 'Alíquota COFINS %', def: 3     },
+                  { field: 'aliquotaCSLL',   label: 'Alíquota CSLL %',   def: 9     },
+                  { field: 'aliquotaIRPJ',   label: 'Alíquota IRPJ %',   def: 15    },
+                ].map(f => (
+                  <div key={f.field} className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">{f.label}</label>
+                    <input type="number" step="0.01" min={0} max={100} className="form-input"
+                      value={fiscalCfg[f.field] ?? f.def}
+                      onChange={e => setFiscalCfg(c => ({ ...c, [f.field]: Number(e.target.value) }))}
+                      placeholder={String(f.def)}/>
+                  </div>
+                ))}
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">WhatsApp do contador</label>
+                  <input className="form-input" value={fiscalCfg.numContador || ''}
+                    onChange={e => setFiscalCfg(f => ({ ...f, numContador: e.target.value }))}
+                    placeholder="(11) 99999-9999"/>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Emissão de Nota Fiscal */}
+            <div>
+              <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 10 }}>4. Emissão de Nota Fiscal</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { val: 'nao_emite', label: 'Não emite nota fiscal' },
+                  { val: 'nfse',      label: 'NFS-e (Nota Fiscal de Serviço Eletrônica)' },
+                  { val: 'nfe',       label: 'NF-e (Nota Fiscal de Produto)' },
+                  { val: 'nfce',      label: 'NFC-e (Nota Fiscal ao Consumidor)' },
+                  { val: 'cupom',     label: 'Cupom Fiscal' },
+                ].map(opt => (
+                  <label key={opt.val} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <input type="radio" name="emissaoNF" value={opt.val}
+                      checked={fiscalCfg.emissaoNF === opt.val}
+                      onChange={() => setFiscalCfg(f => ({ ...f, emissaoNF: opt.val }))}/>
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12 }}>
+              {fiscalSaved && (
+                <span style={{ fontSize: '0.8125rem', color: '#276749' }}>✓ Configurações fiscais salvas!</span>
+              )}
+              <button className="btn btn-primary btn-sm" onClick={handleSaveFiscal}>
+                <Save size={14} /> Salvar configurações fiscais
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast expiração dev */}
       {devToast && (
