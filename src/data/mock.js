@@ -186,7 +186,7 @@ export const LANCAMENTOS = [
 ]
 
 export const USUARIOS = [
-  { id: 'u-danilo', name: 'Danilo Toledo',  email: 'dastoledo@gmail.com',          role: 'admin',       initials: 'DT', active: true,  crmv: '',         lastLogin: null,                  firstLogin: false, permissions: { dashboard: true, pets: true, prontuario: true, agenda: true, estoque: true, servicos: true, financeiro: true, usuarios: true } },
+  // u-danilo removido — conta dev usa o mesmo email (dastoledo@gmail.com)
   { id: 'u-julia',  name: 'Julia',          email: 'julia@emporiumvazpet.com.br',  role: 'admin',       initials: 'JU', active: true,  crmv: '',         lastLogin: null,                  firstLogin: false, permissions: { dashboard: true, pets: true, prontuario: true, agenda: true, estoque: true, servicos: true, financeiro: true, usuarios: true } },
   { id: 'u-tamara', name: 'Tamara',         email: 'tamara@tatabi.com.br',         role: 'admin',       initials: 'TA', active: true,  crmv: '',         lastLogin: null,                  firstLogin: false, permissions: { dashboard: true, pets: true, prontuario: true, agenda: true, estoque: true, servicos: true, financeiro: true, usuarios: true } },
   { id: 'u1',       name: 'Admin Emporium', email: 'admin@emporiumvazpet.com.br',  role: 'admin',       initials: 'AE', active: true,  crmv: '',         lastLogin: '2026-05-14T08:00:00', firstLogin: false, permissions: { dashboard: true, pets: true, prontuario: true, agenda: true, estoque: true, servicos: true, financeiro: true, usuarios: true } },
@@ -194,7 +194,12 @@ export const USUARIOS = [
   { id: 'u3',       name: 'Carlos Menezes', email: 'carlos@petvet.com',            role: 'veterinario', initials: 'CM', active: true,  crmv: 'SP-67890', lastLogin: '2026-05-13T18:30:00', firstLogin: false, permissions: { dashboard: true, pets: true, prontuario: true, agenda: true, estoque: false, servicos: true, financeiro: false, usuarios: false } },
   { id: 'u4',       name: 'Fernanda Rocha', email: 'fernanda@petvet.com',          role: 'atendente',   initials: 'FR', active: true,  crmv: '',         lastLogin: '2026-05-14T07:45:00', firstLogin: false, permissions: { dashboard: true, pets: true, prontuario: false, agenda: true, estoque: true, servicos: true, financeiro: false, usuarios: false } },
   { id: 'u5',       name: 'Rafael Santos',  email: 'rafael@petvet.com',            role: 'atendente',   initials: 'RS', active: false, crmv: '',         lastLogin: '2026-04-30T17:00:00', firstLogin: false, permissions: { dashboard: true, pets: true, prontuario: false, agenda: true, estoque: true, servicos: true, financeiro: false, usuarios: false } },
+  { id: 'u-ss-dev', name: 'Danilo Toledo',  email: 'dastoledo@gmail.com',          role: 'dev',         initials: 'DT', active: true,  crmv: '',         lastLogin: null,                  firstLogin: false, permissions: {} },
 ]
+
+// Email do usuário desenvolvedor — constante usada no fluxo de login
+export const DEV_EMAIL = 'dastoledo@gmail.com'
+export const DEV_USER_ID = 'u-ss-dev'
 
 export const ATIVIDADES = [
   { id: 'at1', userId: 'u1', action: 'Login no sistema',                    date: '2026-05-14T08:00:00', module: 'Auth' },

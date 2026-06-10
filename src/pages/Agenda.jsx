@@ -2,12 +2,15 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, X } from 'lucide-react'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
+import EnderecoFields from '../components/ui/EnderecoFields'
+import MapaModal from '../components/ui/MapaModal'
 import { AGENDAMENTOS, PETS, TUTORES } from '../data/mock'
 import { getVeterinarios, findVetById } from '../utils/getVeterinarios'
 import { useAuth } from '../context/AuthContext'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { useFollowup } from '../context/FollowupContext'
 import { normIncludes } from '../utils/normalizeText'
+import { EMPTY_ENDERECO, getEnderecoObj, montarEnderecoMapa, enderecoCompleto } from '../utils/endereco'
 
 const BATH_TYPES = ['banho', 'sobanho', 'tosa']
 
@@ -37,7 +40,13 @@ const EMPTY_APT = {
   petId: '', tutorId: '', vetId: '', banistaId: '',
   date: '', time: '09:00', duration: 30,
   type: 'consulta', status: 'agendado', notes: '',
-  tipoAtendimento: 'presencial', enderecoAtendimento: '',
+  tipoAtendimento: 'presencial', endereco: { ...EMPTY_ENDERECO },
+}
+
+// Normaliza o endereço do agendamento, suportando o formato antigo (string em enderecoAtendimento)
+function getAptEndereco(apt) {
+  if (apt?.endereco && typeof apt.endereco === 'object') return apt.endereco
+  return getEnderecoObj(apt?.enderecoAtendimento ?? '')
 }
 
 function dateStr(y, m, d) {
@@ -152,7 +161,7 @@ export default function AgendaPage({ navParams = {} }) {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [mobileView, setMobileView] = useState('lista')
   const [conflictWarning, setConflictWarning] = useState(null)
-  const [showMapMenu, setShowMapMenu] = useState(false)
+  const [mapModalEndereco, setMapModalEndereco] = useState(null)
   const timeInputRef = useRef(null)
 
   const agendamentos = Array.isArray(rawAgendamentos) ? rawAgendamentos : []
@@ -239,7 +248,7 @@ export default function AgendaPage({ navParams = {} }) {
 
   function openEdit(apt) {
     setEditingApt(apt)
-    setForm({ ...apt })
+    setForm({ ...apt, endereco: getAptEndereco(apt) })
     const allPetsM = Array.isArray(petsLS) ? petsLS : PETS
     const pet = allPetsM.find(p => p.id === apt.petId)
     setPetSearch(pet?.name ?? '')
@@ -439,8 +448,11 @@ export default function AgendaPage({ navParams = {} }) {
                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
                           {cfg.label} · {tutorName}{profName ? ` · ${profName}` : ''}
                         </p>
-                        {apt.tipoAtendimento === 'domiciliar' && apt.enderecoAtendimento && (
-                          <p style={{ fontSize: '0.72rem', color: 'var(--teal)', marginTop: 1 }}>📍 {apt.enderecoAtendimento}</p>
+                        {apt.tipoAtendimento === 'domiciliar' && montarEnderecoMapa(getAptEndereco(apt)) && (
+                          <p style={{ fontSize: '0.72rem', color: 'var(--teal)', marginTop: 1, cursor: 'pointer', textDecoration: 'underline' }}
+                            onClick={e => { e.stopPropagation(); setMapModalEndereco(getAptEndereco(apt)) }}>
+                            📍 {montarEnderecoMapa(getAptEndereco(apt))}
+                          </p>
                         )}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
@@ -604,10 +616,10 @@ export default function AgendaPage({ navParams = {} }) {
                         {cfg.label} · {tutorName}
                         {profName && <span style={{ color: 'var(--text-secondary)' }}> · {profName}</span>}
                       </div>
-                      {apt.tipoAtendimento === 'domiciliar' && apt.enderecoAtendimento && (
+                      {apt.tipoAtendimento === 'domiciliar' && montarEnderecoMapa(getAptEndereco(apt)) && (
                         <div style={{ fontSize: '0.72rem', color: 'var(--teal)', marginTop: 2, cursor: 'pointer', textDecoration: 'underline' }}
-                          onClick={e => { e.stopPropagation(); window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(apt.enderecoAtendimento)}`, '_blank') }}>
-                          📍 {apt.enderecoAtendimento}
+                          onClick={e => { e.stopPropagation(); setMapModalEndereco(getAptEndereco(apt)) }}>
+                          📍 {montarEnderecoMapa(getAptEndereco(apt))}
                         </div>
                       )}
                       {apt.status === 'agendado' && hasPermission('agenda', 'edit') && (
@@ -641,6 +653,10 @@ export default function AgendaPage({ navParams = {} }) {
         onConfirm={() => setAgendamentos(prev => prev.filter(a => a.id !== deleteTarget.id))}
         message="O item será excluído permanentemente. Confirmar?"
       />
+
+      {mapModalEndereco && (
+        <MapaModal endereco={mapModalEndereco} onClose={() => setMapModalEndereco(null)} />
+      )}
 
       {/* Modal de conflito de horário — z-index 9999, nunca simultâneo com o form */}
       {conflictWarning && (() => {
@@ -811,7 +827,7 @@ export default function AgendaPage({ navParams = {} }) {
                       const allPets = Array.isArray(petsLS) ? petsLS : PETS
                       const allTutores = Array.isArray(tutoresLS) ? tutoresLS : TUTORES
                       const tutor = allTutores.find(t => t.id === allPets.find(p => p.id === f.petId)?.tutorId)
-                      return { ...f, tipoAtendimento: v, enderecoAtendimento: v === 'domiciliar' ? (tutor?.address ?? '') : f.enderecoAtendimento }
+                      return { ...f, tipoAtendimento: v, endereco: v === 'domiciliar' ? getEnderecoObj(tutor?.endereco ?? tutor?.address ?? '') : f.endereco }
                     })} />
                   {l}
                 </label>
@@ -822,26 +838,21 @@ export default function AgendaPage({ navParams = {} }) {
           {form.tipoAtendimento === 'domiciliar' && (
             <div className="form-group">
               <label className="form-label">Endereço de atendimento</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input className="form-input" value={form.enderecoAtendimento ?? ''} onChange={e => setForm(f => ({ ...f, enderecoAtendimento: e.target.value }))} placeholder="Rua, número, bairro, cidade" />
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <button type="button" className="btn btn-outline btn-sm" style={{ whiteSpace: 'nowrap' }} onClick={() => setShowMapMenu(v => !v)}>📍 Mapa</button>
-                  {showMapMenu && form.enderecoAtendimento && (
-                    <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 200, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-md)', padding: 4, minWidth: 150, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {[
-                        { l: 'Google Maps', url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(form.enderecoAtendimento)}` },
-                        { l: 'Waze',        url: `https://waze.com/ul?q=${encodeURIComponent(form.enderecoAtendimento)}` },
-                        { l: 'Apple Maps',  url: `maps://maps.apple.com/?q=${encodeURIComponent(form.enderecoAtendimento)}` },
-                      ].map(({ l, url }) => (
-                        <button key={l} className="btn btn-ghost btn-sm" style={{ justifyContent: 'flex-start', fontSize: '0.8125rem' }}
-                          onClick={() => { window.open(url, '_blank'); setShowMapMenu(false) }}>
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0 0 8px' }}>
+                Pré-preenchido com o endereço cadastrado do tutor. Pode ser editado apenas para este agendamento, sem alterar o cadastro.
+              </p>
+              <EnderecoFields value={form.endereco} onChange={endereco => setForm(f => ({ ...f, endereco }))} />
+              <div style={{ marginTop: 8, fontSize: '0.8125rem' }}>
+                {enderecoCompleto(form.endereco) ? (
+                  <span style={{ color: 'var(--success)' }}>✅ Endereço completo</span>
+                ) : (
+                  <span style={{ color: 'var(--warning)' }}>⚠️ Endereço incompleto — preencha ao menos rua, número e cidade</span>
+                )}
               </div>
+              <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 8 }}
+                onClick={() => setMapModalEndereco(form.endereco)}>
+                📍 Ver no mapa
+              </button>
             </div>
           )}
         </div>

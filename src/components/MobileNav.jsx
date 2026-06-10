@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, Calendar, ShoppingCart,
   MoreHorizontal, FileText, Package, Scissors,
   DollarSign, Syringe, Pill, BarChart2, Calculator,
-  UserCog, Briefcase, Tag, Settings, X, LogOut,
+  UserCog, Briefcase, Tag, Settings, Palette, X, LogOut,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -27,10 +27,11 @@ const MORE_NAV = [
 ]
 
 const ADMIN_MORE = [
-  { id: 'usuarios',          label: 'Usuários',     icon: UserCog },
-  { id: 'funcionarios',      label: 'Funcionários', icon: Briefcase },
-  { id: 'racas',             label: 'Raças',        icon: Tag },
-  { id: 'prontuario-config', label: 'Config. Pront.', icon: Settings },
+  { id: 'usuarios',          label: 'Usuários',        icon: UserCog },
+  { id: 'funcionarios',      label: 'Funcionários',    icon: Briefcase },
+  { id: 'racas',             label: 'Raças',           icon: Tag },
+  { id: 'prontuario-config', label: 'Config. Pront.',  icon: Settings },
+  { id: 'configuracoes',     label: 'Configurações',   icon: Palette },
 ]
 
 export default function MobileNav({ currentPage, onNavigate }) {

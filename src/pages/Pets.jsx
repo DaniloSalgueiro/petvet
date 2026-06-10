@@ -12,7 +12,9 @@ import { maskCPF, maskRG, maskPhone } from '../utils/masks'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
+import EnderecoFields from '../components/ui/EnderecoFields'
 import { RACAS_INICIAIS } from '../data/racas'
+import { EMPTY_ENDERECO, getEnderecoObj, getEnderecoString, enderecoFoiMigrado } from '../utils/endereco'
 
 const SPECIES_ICON = { 'Cão': '🐕', 'Gato': '🐈', 'Peixe': '🐠', 'Pássaro': '🦜', 'Coelho': '🐇' }
 
@@ -55,7 +57,7 @@ const EMPTY_PET = {
   vermifugacao: 'Em dia', castrado: 'Não', planoSaude: 'Não', planoNome: '',
   planoCarteirinha: '', foto: null,
 }
-const EMPTY_TUTOR = { name: '', cpf: '', rg: '', phone: '', email: '', address: '' }
+const EMPTY_TUTOR = { name: '', cpf: '', rg: '', phone: '', email: '', endereco: { ...EMPTY_ENDERECO } }
 
 export default function PetsPage({ navigateTo, navParams }) {
   const { hasRole, hasPermission } = useAuth()
@@ -77,6 +79,7 @@ export default function PetsPage({ navigateTo, navParams }) {
   const [deleteTutorTarget, setDeleteTutorTarget] = useState(null)
   const [dupWarn, setDupWarn] = useState('')
   const [tutorDupWarn, setTutorDupWarn] = useState('')
+  const [addressMigrated, setAddressMigrated] = useState(false)
   const [pageTab, setPageTab] = useState('pets')
   const [tutorSearch, setTutorSearch] = useState('')
   const [storedRacas] = usePersistentState('petvet-racas', RACAS_INICIAIS)
@@ -103,6 +106,21 @@ export default function PetsPage({ navigateTo, navParams }) {
   function openPetDetail(pet) { setSelectedPet(pet); setView('detail') }
   function openAddPet() { setEditingPet(null); setPetForm(EMPTY_PET); setDupWarn(''); setShowPetModal(true) }
   function openEditPet(pet) { setEditingPet(pet); setPetForm({ ...EMPTY_PET, ...pet }); setDupWarn(''); setShowPetModal(true) }
+
+  function openEditTutor(t) {
+    setEditingTutor(t)
+    setTutorForm({ ...EMPTY_TUTOR, ...t, endereco: getEnderecoObj(t.endereco ?? t.address) })
+    setAddressMigrated(enderecoFoiMigrado(t))
+    setTutorDupWarn('')
+    setShowTutorModal(true)
+  }
+  function openNewTutor() {
+    setEditingTutor(null)
+    setTutorForm(EMPTY_TUTOR)
+    setAddressMigrated(false)
+    setTutorDupWarn('')
+    setShowTutorModal(true)
+  }
 
   function savePet() {
     if (!petForm.name || !petForm.tutorId) return
@@ -155,7 +173,7 @@ export default function PetsPage({ navigateTo, navParams }) {
     <>
       {view === 'detail' && selectedPet ? (
         <PetDetail pet={selectedPet} tutores={tutores} onBack={() => setView('list')} onEdit={() => openEditPet(selectedPet)} hasRole={hasRole} hasPermission={hasPermission} navigateTo={navigateTo} onDeleteTutor={setDeleteTutorTarget} onDeletePet={setDeleteTarget}
-          onEditTutor={t => { setEditingTutor(t); setTutorForm({ ...EMPTY_TUTOR, ...t }); setTutorDupWarn(''); setShowTutorModal(true) }} />
+          onEditTutor={openEditTutor} />
       ) : (
       <div className="page">
         <div className="page-header">
@@ -165,7 +183,7 @@ export default function PetsPage({ navigateTo, navParams }) {
           </div>
           {hasPermission('pets', 'edit') && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button className="btn btn-outline btn-sm" onClick={() => { setEditingTutor(null); setTutorForm(EMPTY_TUTOR); setTutorDupWarn(''); setShowTutorModal(true) }}>
+              <button className="btn btn-outline btn-sm" onClick={openNewTutor}>
                 <Plus size={15} /> Novo Tutor
               </button>
               {pageTab === 'pets' && (
@@ -197,7 +215,7 @@ export default function PetsPage({ navigateTo, navParams }) {
               <button className="btn btn-outline btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}
                 onClick={() => {
                   const headers = ['Nome', 'CPF', 'RG', 'Telefone', 'E-mail', 'Endereço', 'Pets']
-                  const rows = tutoresFiltrados.map(t => [t.name, t.cpf ?? '', t.rg ?? '', t.phone ?? '', t.email ?? '', t.address ?? '', pets.filter(p => p.tutorId === t.id).map(p => p.name).join(', ')])
+                  const rows = tutoresFiltrados.map(t => [t.name, t.cpf ?? '', t.rg ?? '', t.phone ?? '', t.email ?? '', getEnderecoString(t), pets.filter(p => p.tutorId === t.id).map(p => p.name).join(', ')])
                   exportCSV('tutores', headers, rows)
                 }}>
                 <Download size={14} /> Exportar CSV
@@ -225,7 +243,7 @@ export default function PetsPage({ navigateTo, navParams }) {
                           <td>
                             <div style={{ display: 'flex', gap: 6 }}>
                               {hasPermission('pets', 'edit') && (
-                                <button className="btn btn-outline btn-sm" onClick={() => { setEditingTutor(t); setTutorForm({ ...EMPTY_TUTOR, ...t }); setTutorDupWarn(''); setShowTutorModal(true) }}>
+                                <button className="btn btn-outline btn-sm" onClick={() => openEditTutor(t)}>
                                   <Edit2 size={13} /> Editar
                                 </button>
                               )}
@@ -438,7 +456,7 @@ export default function PetsPage({ navigateTo, navParams }) {
 
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label className="form-label">Tutor *</label>
-            <TutorSearchField tutores={tutores} value={petForm.tutorId} onChange={id => setPetForm(f => ({ ...f, tutorId: id }))} onAddNew={() => { setEditingTutor(null); setTutorForm(EMPTY_TUTOR); setTutorDupWarn(''); setShowTutorModal(true) }} />
+            <TutorSearchField tutores={tutores} value={petForm.tutorId} onChange={id => setPetForm(f => ({ ...f, tutorId: id }))} onAddNew={openNewTutor} />
           </div>
           <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label className="form-label">Observações</label>
@@ -487,10 +505,13 @@ export default function PetsPage({ navigateTo, navParams }) {
             <label className="form-label">E-mail</label>
             <input type="email" className="form-input" value={tutorForm.email} onChange={e => setTutorForm(f => ({ ...f, email: e.target.value }))} placeholder="email@exemplo.com" />
           </div>
-          <div className="form-group">
-            <label className="form-label">Endereço</label>
-            <input className="form-input" value={tutorForm.address} onChange={e => setTutorForm(f => ({ ...f, address: e.target.value }))} placeholder="Rua, número, bairro, cidade" />
-          </div>
+          {addressMigrated && (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: 'rgba(214,158,46,0.1)', border: '1px solid var(--warning)', borderRadius: 8, padding: '10px 14px' }}>
+              <AlertCircle size={15} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+              <span style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>Endereço importado do formato antigo. Revise os campos abaixo.</span>
+            </div>
+          )}
+          <EnderecoFields value={tutorForm.endereco} onChange={endereco => setTutorForm(f => ({ ...f, endereco }))} />
         </div>
       </Modal>
 
@@ -607,7 +628,7 @@ function PetDetail({ pet, tutores, onBack, onEdit, hasRole, hasPermission, navig
               {tutor.rg && <InfoRow label="RG" value={tutor.rg} />}
               <InfoRow label="Telefone" value={tutor.phone} />
               <InfoRow label="E-mail" value={tutor.email} />
-              <InfoRow label="Endereço" value={tutor.address} />
+              <InfoRow label="Endereço" value={getEnderecoString(tutor) || '—'} />
             </>
           ) : <p style={{ color: 'var(--text-muted)' }}>Tutor não encontrado</p>}
         </div>

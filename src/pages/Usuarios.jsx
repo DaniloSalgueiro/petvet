@@ -104,7 +104,17 @@ export default function UsuariosPage() {
     )
   }
 
-  const [usuarios, setUsuarios] = usePersistentState('petvet-usuarios', USUARIOS)
+  const [rawUsuarios, setRawUsuarios] = usePersistentState('petvet-usuarios', USUARIOS)
+  // Oculta o usuário dev da gestão de usuários da clínica
+  const usuarios = Array.isArray(rawUsuarios) ? rawUsuarios.filter(u => u.role !== 'dev') : rawUsuarios
+  function setUsuarios(updater) {
+    setRawUsuarios(prev => {
+      const devUsers = Array.isArray(prev) ? prev.filter(u => u.role === 'dev') : []
+      const clinicaUsers = Array.isArray(prev) ? prev.filter(u => u.role !== 'dev') : prev
+      const next = typeof updater === 'function' ? updater(clinicaUsers) : updater
+      return [...devUsers, ...next]
+    })
+  }
   const [perfis, setPerfis] = usePersistentState('petvet-perfis', [])
   const [atividades] = useState(ATIVIDADES)
   const [activeTab, setActiveTab] = useState('usuarios')

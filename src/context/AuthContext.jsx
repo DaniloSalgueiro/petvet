@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { loadFromSupabase, syncToSupabase } from '../hooks/useSupabaseSync'
-import { USUARIOS } from '../data/mock'
+import { USUARIOS, DEV_EMAIL, DEV_USER_ID } from '../data/mock'
 
 const AuthContext = createContext(null)
 const DEFAULT_PASSWORD = '123456'
@@ -56,12 +56,20 @@ function initializeAuthStorage() {
     if (storedRaw) {
       const stored = JSON.parse(storedRaw)
       if (!Array.isArray(stored)) throw new Error('invalid')
-      const storedById = Object.fromEntries(stored.map(u => [u.id, u]))
+
+      // Remove entradas legadas com mesmo email que DEV_USER mas id diferente (ex: u-danilo)
+      const cleanedStored = stored.filter(u =>
+        !(u.email?.toLowerCase() === DEV_EMAIL.toLowerCase() && u.id !== DEV_USER_ID)
+      )
+
+      const storedById = Object.fromEntries(cleanedStored.map(u => [u.id, u]))
       const deletedIds = getDeletedIds()
       const activeMockUsers = USUARIOS.filter(u => !deletedIds.has(u.id))
       const missingMockUser = activeMockUsers.some(u => !storedById[u.id])
-      if (missingMockUser) {
-        const extra = stored.filter(u => !USUARIOS.find(m => m.id === u.id))
+
+      // Salva se houve limpeza legada OU se faltam mock users
+      if (missingMockUser || cleanedStored.length !== stored.length) {
+        const extra = cleanedStored.filter(u => !USUARIOS.find(m => m.id === u.id))
         localStorage.setItem('petvet-usuarios', JSON.stringify([...activeMockUsers, ...extra]))
       }
     }
@@ -83,6 +91,16 @@ function initializeAuthStorage() {
     if (!validIds.has(id)) { delete map[id]; changed = true }
   }
   if (changed) savePasswordMap(map)
+}
+
+// Retorna a senha correta para o usuário dev (de petvet-dev-password ou padrão)
+function getDevPassword() {
+  try {
+    const stored = localStorage.getItem('petvet-dev-password')
+    if (stored) return atob(stored)
+  } catch {}
+  // Senha padrão como char codes — não fica em texto claro no bundle
+  return [100,78,76,64,56,57,48,49].map(c => String.fromCharCode(c)).join('')
 }
 
 const SESSION_KEY = 'petvet-session-user'
@@ -125,6 +143,24 @@ export function AuthProvider({ children }) {
 
   // ── Login: tenta Supabase Auth primeiro, cai no localStorage se falhar ──────
   async function login(email, password) {
+    // Tentativa especial: usuário dev autentica via petvet-dev-password (independente do Supabase)
+    if (email.toLowerCase() === DEV_EMAIL.toLowerCase()) {
+      const senhaCorreta = getDevPassword()
+      if (password === senhaCorreta) {
+        const users = getStoredUsers()
+        const devUser = users.find(u => u.id === DEV_USER_ID) ||
+                        USUARIOS.find(u => u.id === DEV_USER_ID)
+        if (devUser && devUser.active !== false) {
+          setUser(devUser)
+          setMustChangePassword(false)
+          saveSession(devUser)
+          return true
+        }
+      }
+      // Senha incorreta para dev — não tenta outros fluxos
+      return false
+    }
+
     // Tentativa 1: Supabase Auth
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
@@ -178,9 +214,15 @@ export function AuthProvider({ children }) {
     return user && roles.includes(user.role)
   }
 
+  function isDevMode() {
+    return user?.role === 'dev'
+  }
+
   function hasPermission(module, level = 'view') {
     if (!user) return false
     if (user.role === 'admin') return true
+    // dev só tem acesso às permissões calculadas em devAccess.js
+    if (user.role === 'dev') return false
     const perm = user.permissions?.[module]
     if (perm === undefined || perm === null) return false
     if (typeof perm === 'boolean') return perm
@@ -210,7 +252,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, hasRole, hasPermission, changePassword, resetPassword, mustChangePassword }}>
+    <AuthContext.Provider value={{ user, login, logout, hasRole, isDevMode, hasPermission, changePassword, resetPassword, mustChangePassword }}>
       {children}
     </AuthContext.Provider>
   )

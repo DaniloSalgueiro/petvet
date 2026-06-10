@@ -69,10 +69,25 @@ export function useCloudState(key, initialValue) {
       .then(({ data, error }) => {
         if (!mountedRef.current) return
         if (!error && data?.value !== undefined && data.value !== null) {
-          // Supabase tem dados: atualiza React + localStorage
-          fromCloudRef.current = true
-          setState(data.value)
-          try { localStorage.setItem(key, JSON.stringify(data.value)) } catch {}
+          // Comparar timestamps antes de sobrescrever dados locais
+          const supabaseTime = data.value?._updatedAt || 0
+          const localTime    = stateRef.current?._updatedAt || 0
+
+          if (supabaseTime >= localTime) {
+            // Supabase é mais recente ou igual — atualizar local
+            fromCloudRef.current = true
+            setState(data.value)
+            try { localStorage.setItem(key, JSON.stringify(data.value)) } catch {}
+          } else {
+            // Local é mais recente — empurrar local para Supabase (fire-and-forget)
+            const val = stateRef.current
+            if (!isEmptyValue(val)) {
+              supabase.from('app_state').upsert(
+                { key, value: val, updated_at: new Date().toISOString() },
+                { onConflict: 'key' }
+              ).catch(() => {})
+            }
+          }
         } else if (!error) {
           // Supabase conectado mas sem dados para esta chave:
           // persiste o valor atual (localStorage ou initialValue) para outros dispositivos

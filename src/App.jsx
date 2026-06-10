@@ -54,11 +54,8 @@ function AppShell() {
   )
 }
 
-const PLANOS_MODULOS = {
-  basico: ['dashboard','pets','prontuario','agenda','configuracoes'],
-  plus:   ['dashboard','pets','prontuario','agenda','vacinaprotocolo','bulario','estoque','servicos','configuracoes'],
-  pro:    null,
-}
+import { DEFAULT_PLANOS } from './lib/planos'
+import { devPodeAcessar, registrarAcessoDev } from './lib/devAccess'
 
 const PAGE_NAMES = {
   estoque: 'Estoque', servicos: 'Serviços', financeiro: 'Financeiro',
@@ -68,29 +65,67 @@ const PAGE_NAMES = {
   contabilidade: 'Contabilidade', crm: 'CRM',
 }
 
-function getPlano() {
-  try { return JSON.parse(localStorage.getItem('petvet-ss-config') ?? '{}').plano || 'pro' }
-  catch { return 'pro' }
+function getSsCfg() {
+  try { return JSON.parse(localStorage.getItem('petvet-ss-config') ?? '{}') } catch { return {} }
 }
-
-function ModuloNaoDisponivel({ name }) {
-  return (
-    <div className="page">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 300, gap: 12, textAlign: 'center', color: 'var(--text-muted)' }}>
-        <div style={{ fontSize: '3rem' }}>🔒</div>
-        <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>{name || 'Módulo'} não disponível</p>
-        <p style={{ fontSize: '0.875rem' }}>Este módulo não está incluído no plano atual.<br/>Entre em contato com a Salgueiro Systems para fazer upgrade.</p>
-      </div>
-    </div>
-  )
+function getPlano() {
+  return getSsCfg().plano || 'pro'
+}
+function getModulosAtivos() {
+  const cfg = getSsCfg()
+  const planoId = cfg.plano || 'pro'
+  // Novo formato: array de planos em cfg.planos
+  if (Array.isArray(cfg.planos) && cfg.planos.length > 0) {
+    const plano = cfg.planos.find(p => p.id === planoId) ?? cfg.planos[cfg.planos.length - 1]
+    return plano?.modulos ?? null
+  }
+  // Legado: objeto { basico, plus } em cfg.planosCustom
+  const planos = cfg.planosCustom || DEFAULT_PLANOS
+  return planos[planoId] ?? null
 }
 
 function PageRouter({ page, navParams, navigateTo }) {
-  const plano = getPlano()
-  const modulosAtivos = PLANOS_MODULOS[plano] ?? null
+  const { user } = useAuth()
+  const isDevUser = user?.role === 'dev'
+  const modulosAtivos = getModulosAtivos()
+
+  // Proteção de rota para usuário dev — LGPD
+  if (isDevUser && !devPodeAcessar(page)) {
+    return (
+      <div className="page">
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:300, gap:14, textAlign:'center', padding:24 }}>
+          <div style={{ fontSize:'3rem' }}>🔒</div>
+          <p style={{ fontWeight:700, fontSize:'1rem', color:'var(--text-primary)' }}>
+            Módulo restrito — Modo Desenvolvedor
+          </p>
+          <p style={{ fontSize:'0.875rem', color:'var(--text-muted)', maxWidth:420, lineHeight:1.7 }}>
+            Este módulo contém dados do cliente e não está acessível no modo desenvolvedor.<br/>
+            Para acesso a dados, solicite autorização formal ao cliente através da seção<br/>
+            <strong>Configurações → Suporte Técnico</strong>.
+          </p>
+          <button className="btn btn-outline btn-sm" onClick={() => navigateTo('dashboard')}>
+            Voltar ao início
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Registrar acesso dev no log
+  if (isDevUser) registrarAcessoDev(page, user?.name)
 
   if (modulosAtivos && !modulosAtivos.includes(page)) {
-    return <ModuloNaoDisponivel name={PAGE_NAMES[page] ?? page} />
+    // Página bloqueada por plano — fallback
+    const name = PAGE_NAMES[page] ?? page
+    return (
+      <div className="page">
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:300, gap:12, textAlign:'center', color:'var(--text-muted)' }}>
+          <div style={{ fontSize:'3rem' }}>🔒</div>
+          <p style={{ fontWeight:700, fontSize:'1rem', color:'var(--text-primary)' }}>{name} não disponível</p>
+          <p style={{ fontSize:'0.875rem' }}>Este módulo não está incluído no plano atual.<br/>Entre em contato com a Salgueiro Systems para fazer upgrade.</p>
+        </div>
+      </div>
+    )
   }
 
   switch (page) {

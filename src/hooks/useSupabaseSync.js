@@ -56,13 +56,32 @@ export async function loadAll() {
 
     if (error) throw error
 
-    // Atualiza localStorage com dados do Supabase
-    const foundKeys = new Set()
-    const result = {}
+    // Atualiza localStorage com dados do Supabase (protegido por timestamp)
+    const foundKeys  = new Set()
+    const result     = {}
+    const toUpload   = [] // chaves onde o local é mais recente que o Supabase
+
     for (const row of (data || [])) {
       result[row.key] = row.value
       foundKeys.add(row.key)
-      try { localStorage.setItem(row.key, JSON.stringify(row.value)) } catch {}
+
+      const supabaseTime = row.value?._updatedAt || 0
+      const localRaw     = localStorage.getItem(row.key)
+      let   localTime    = 0
+      if (localRaw !== null) {
+        try { localTime = JSON.parse(localRaw)?._updatedAt || 0 } catch {}
+      }
+
+      if (localTime > supabaseTime) {
+        // Local é mais recente — NÃO sobrescrever; agendar upload do local para Supabase
+        try {
+          const localData = JSON.parse(localRaw)
+          if (!isEmptyValue(localData)) toUpload.push({ key: row.key, value: localData, updated_at: new Date().toISOString() })
+        } catch {}
+      } else {
+        // Supabase é mais recente ou igual — atualizar localStorage
+        try { localStorage.setItem(row.key, JSON.stringify(row.value)) } catch {}
+      }
     }
 
     // Chaves ausentes no Supabase mas presentes no localStorage → upsert em lote
@@ -79,12 +98,13 @@ export async function loadAll() {
       } catch {}
     }
 
-    if (missingRows.length > 0) {
+    const allToUpload = [...missingRows, ...toUpload]
+    if (allToUpload.length > 0) {
       await supabase
         .from('app_state')
-        .upsert(missingRows, { onConflict: 'key' })
-        .catch(e => console.warn('[PetVet] loadAll upsert missing:', e.message))
-      console.log(`[PetVet] loadAll: ${missingRows.length} chave(s) do localStorage salvas no Supabase`)
+        .upsert(allToUpload, { onConflict: 'key' })
+        .catch(e => console.warn('[PetVet] loadAll upsert:', e.message))
+      console.log(`[PetVet] loadAll: ${allToUpload.length} chave(s) enviadas ao Supabase (${missingRows.length} ausentes + ${toUpload.length} locais mais recentes)`)
     }
 
     console.log(`[PetVet] loadAll: ${(data || []).length}/${SYNC_KEYS.length} chaves carregadas do Supabase`)

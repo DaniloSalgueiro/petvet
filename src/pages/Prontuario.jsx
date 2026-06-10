@@ -12,6 +12,8 @@ import { calcularIdade } from '../utils/calcularIdade'
 import { generateProntuarioPrint } from '../utils/generateProntuarioPrint'
 import { generateFichaHTML } from '../utils/generateFichaHTML'
 import { maskCPF, maskRG, maskPhone } from '../utils/masks'
+import GravacaoConsulta from '../components/GravacaoConsulta'
+import { COMANDOS_VOZ_DEFAULT, getByPath, setByPath } from '../utils/voiceCommands'
 
 // ---- Tipos de consulta e config padrão ----
 export const TIPOS_CONSULTA_DEFAULT = ['Consulta Clínica Geral', 'Consulta Dermatológica', 'Consulta Canábica', 'Retorno', 'Cirurgia']
@@ -24,6 +26,7 @@ export const SECTIONS_CONFIGURABLES = [
   { id: 'vacinas',            label: 'Vacinas' },
   { id: 'aplicacoes',         label: 'Aplicações' },
   { id: 'solicitacao-exames', label: 'Solicitação de Exames' },
+  { id: 'diagnostico-diferencial', label: 'Diagnóstico Diferencial' },
   { id: 'diagnostico',        label: 'Diagnóstico' },
   { id: 'prescricao',         label: 'Prescrição' },
   { id: 'manual-coleta',      label: 'Manual de Coleta' },
@@ -43,6 +46,15 @@ function buildDefaultSectionConfig(tipos) {
 export const DEFAULT_PRONTUARIO_CONFIG = {
   tipos: TIPOS_CONSULTA_DEFAULT,
   sectionConfig: buildDefaultSectionConfig(TIPOS_CONSULTA_DEFAULT),
+}
+
+// ---- Configurações de gravação/transcrição por voz ----
+export const DEFAULT_GRAVACAO_CONFIG = {
+  idioma: 'pt-BR',
+  sensibilidade: 1,
+  confirmarAntes: false,
+  salvarAudioAuto: true,
+  qualidadeAudio: 'media',
 }
 
 // ---- Classificações vitais ----
@@ -399,6 +411,7 @@ const ALL_SECTIONS = [
   { id: 'vacinas',            label: 'Vacinas' },
   { id: 'aplicacoes',         label: 'Aplicações' },
   { id: 'solicitacao-exames', label: 'Solicitação de Exames' },
+  { id: 'diagnostico-diferencial', label: 'Diagnóstico Diferencial' },
   { id: 'diagnostico',        label: 'Diagnóstico' },
   { id: 'prescricao',         label: 'Prescrição' },
   { id: 'manual-coleta',      label: 'Manual de Coleta' },
@@ -490,6 +503,9 @@ const EMPTY_FORM = {
     boca:               { status: 'NDN', obs: '' },
   },
   diagnostico: { diferencial: '', definitivo: '' },
+  transcricaoCompleta: '',
+  diagnosticoIA: null,
+  observacoesGerais: '',
   solicitacaoExames: {},
   prescricao: { medicamentos: [], retorno: '', orientacoes: '' },
   vacinasAplicadas: [],
@@ -714,6 +730,18 @@ export default function ProntuarioPage({ navParams = {} }) {
   const [fichasWaSearch, setFichasWaSearch] = useState('')
   const [petsLS, setPetsLS] = usePersistentState('petvet-pets', PETS)
   const [tutoresLS, setTutoresLS] = usePersistentState('petvet-tutores', TUTORES)
+
+  // ---- Gravação e transcrição por voz ----
+  const [comandosVozCustom] = usePersistentState('petvet-comandos-voz', [])
+  const [gravacaoConfig] = usePersistentState('petvet-config-gravacao', DEFAULT_GRAVACAO_CONFIG)
+  const comandosVoz = useMemo(() => [...COMANDOS_VOZ_DEFAULT, ...(comandosVozCustom ?? [])], [comandosVozCustom])
+  const [flashFields, setFlashFields] = useState({})
+  const [vozLog, setVozLog] = useState([])
+  const [vozToast, setVozToast] = useState(null)
+  const [vozLogAberto, setVozLogAberto] = useState(false)
+  const [diagIALoading, setDiagIALoading] = useState(false)
+  const [diagIAErro, setDiagIAErro] = useState(null)
+  const [editandoTranscricao, setEditandoTranscricao] = useState(false)
 
   const [showExportModal, setShowExportModal] = useState(false)
   const [exportConfirmed, setExportConfirmed] = useState(false)
@@ -971,10 +999,124 @@ export default function ProntuarioPage({ navParams = {} }) {
   function updateDiag(key, value)      { setForm(f => ({ ...f, diagnostico: { ...f.diagnostico, [key]: value } })) }
   function updatePrescricao(key, value){ setForm(f => ({ ...f, prescricao: { ...f.prescricao, [key]: value } })) }
   function updateSolicitacao(key, value) { setForm(f => ({ ...f, solicitacaoExames: { ...f.solicitacaoExames, [key]: value } })) }
-  function addMedicamento()            { setForm(f => ({ ...f, prescricao: { ...f.prescricao, medicamentos: [...f.prescricao.medicamentos, { nome: '', dose: '', via: '', frequencia: '', duracao: '', obs: '' }] } })) }
+  function addMedicamento()            { setForm(f => ({ ...f, prescricao: { ...f.prescricao, medicamentos: [{ nome: '', dose: '', via: '', frequencia: '', duracao: '', obs: '' }, ...f.prescricao.medicamentos] } })) }
   function updateMed(idx, key, value)  { setForm(f => { const meds = [...f.prescricao.medicamentos]; meds[idx] = { ...meds[idx], [key]: value }; return { ...f, prescricao: { ...f.prescricao, medicamentos: meds } } }) }
+  function updateMedMulti(idx, updates){ setForm(f => { const meds = [...f.prescricao.medicamentos]; meds[idx] = { ...meds[idx], ...updates }; return { ...f, prescricao: { ...f.prescricao, medicamentos: meds } } }) }
   function removeMed(idx)              { setForm(f => ({ ...f, prescricao: { ...f.prescricao, medicamentos: f.prescricao.medicamentos.filter((_, i) => i !== idx) } })) }
   function findBulaForPresc(nome)      { return bulario.find(m => norm(m.nomeComercial) === norm(nome) || normIncludes(m.nomeComercial, nome)) ?? null }
+
+  // ---- Comandos de voz ----
+  function flashField(campo) {
+    setFlashFields(f => ({ ...f, [campo]: true }))
+    setTimeout(() => setFlashFields(f => { const n = { ...f }; delete n[campo]; return n }), 2000)
+  }
+
+  function aplicarValorComando(cmd) {
+    const { campo, valor, tipo, label } = cmd
+    setForm(f => {
+      if (tipo === 'add-array') {
+        const atual = getByPath(f, campo) ?? []
+        if (atual.includes(valor)) return f
+        return setByPath(f, campo, [...atual, valor])
+      }
+      if (tipo === 'add-vacina') {
+        return { ...f, vacinasAplicadas: [...(f.vacinasAplicadas ?? []), { nome: valor, data: todayISO() }] }
+      }
+      if (tipo === 'add-medicamento') {
+        return { ...f, prescricao: { ...f.prescricao, medicamentos: [{ nome: valor, dose: '', via: '', frequencia: '', duracao: '', obs: '' }, ...f.prescricao.medicamentos] } }
+      }
+      if (tipo === 'add-aplicacao') {
+        return { ...f, aplicacoes: [...(f.aplicacoes ?? []), { nome: valor, dataAplicacao: todayISO(), via: '', dose: '', obs: '' }] }
+      }
+      const atual = getByPath(f, campo)
+      const novoValor = tipo === 'numero' ? valor : (typeof atual === 'string' && atual ? `${atual} ${valor}` : valor)
+      return setByPath(f, campo, novoValor)
+    })
+    flashField(campo)
+    setVozLog(l => [{ id: `${Date.now()}-${Math.random()}`, label, valor, hora: new Date() }, ...l].slice(0, 30))
+    setVozToast({ id: Date.now(), label, valor })
+  }
+
+  function handleComandoVoz(cmd) {
+    if (gravacaoConfig?.confirmarAntes) {
+      setVozToast({ id: Date.now(), label: cmd.label, valor: cmd.valor, pendente: cmd })
+      return
+    }
+    aplicarValorComando(cmd)
+  }
+
+  function handleTranscricao(trecho) {
+    setForm(f => ({ ...f, transcricaoCompleta: (f.transcricaoCompleta ? f.transcricaoCompleta + ' ' : '') + trecho }))
+  }
+
+  useEffect(() => {
+    if (!vozToast || vozToast.pendente) return
+    const t = setTimeout(() => setVozToast(v => (v?.id === vozToast.id ? null : v)), 3000)
+    return () => clearTimeout(t)
+  }, [vozToast])
+
+  async function gerarDiagnosticosIA() {
+    setDiagIAErro(null)
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+    if (!apiKey) {
+      setDiagIAErro('Configure a API Key do Claude para usar esta função.')
+      return
+    }
+    const petInfo = PETS.find(p => p.id === form.petId)
+    setDiagIALoading(true)
+    try {
+      const prompt = `Você é um assistente veterinário. Com base nas informações abaixo, sugira diagnósticos diferenciais.
+
+Paciente: ${petInfo?.species ?? '—'}, raça ${petInfo?.breed ?? '—'}, idade ${petInfo?.birthDate ? calcularIdade(petInfo.birthDate) : '—'}, peso ${petInfo?.weight ?? '—'} kg, sexo ${petInfo?.sex ?? '—'}.
+
+Transcrição da consulta:
+${form.transcricaoCompleta || '(sem transcrição registrada)'}
+
+Sinais vitais:
+${JSON.stringify(form.vitals, null, 2)}
+
+Responda APENAS com um JSON no formato exato:
+{
+  "diagnosticos": [
+    { "nome": "...", "probabilidade": "Alta" | "Média" | "Baixa", "justificativa": "...", "examesRecomendados": "...", "tratamentoSugerido": "..." }
+  ],
+  "alertas": ["..."],
+  "proximosPassos": "..."
+}`
+
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1500,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      })
+      if (!res.ok) throw new Error(`Erro na API (${res.status})`)
+      const data = await res.json()
+      const texto = data?.content?.[0]?.text ?? ''
+      const match = texto.match(/\{[\s\S]*\}/)
+      if (!match) throw new Error('Resposta da IA em formato inesperado.')
+      const json = JSON.parse(match[0])
+      setForm(f => ({ ...f, diagnosticoIA: json }))
+    } catch (err) {
+      setDiagIAErro(err.message || 'Não foi possível obter sugestões da IA.')
+    } finally {
+      setDiagIALoading(false)
+    }
+  }
+
+  function usarDiagnosticoSugerido(nome) {
+    setForm(f => ({ ...f, diagnostico: { ...f.diagnostico, definitivo: f.diagnostico.definitivo ? `${f.diagnostico.definitivo}\n${nome}` : nome } }))
+    flashField('diagnostico.definitivo')
+    setActiveSection('diagnostico')
+  }
 
   const isReadOnly = selectedPr && !hasPermission('prontuario', 'edit')
   const sectionIdx = visibleSections.findIndex(s => s.id === activeSection)
@@ -1111,6 +1253,24 @@ export default function ProntuarioPage({ navParams = {} }) {
                     </button>
                   </div>
                 )}
+
+                {!isReadOnly && (
+                  <div style={{ marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+                    <p style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: 4 }}>🎙️ Gravação da consulta</p>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 10 }}>
+                      Grave o atendimento e preencha campos automaticamente por voz. É necessária a autorização do tutor.
+                    </p>
+                    <GravacaoConsulta
+                      disabled={isReadOnly}
+                      tutorNome={tutorInfo?.name}
+                      comandosVoz={comandosVoz}
+                      settings={gravacaoConfig}
+                      onComando={handleComandoVoz}
+                      onTranscricao={handleTranscricao}
+                      onAddAnexo={ax => setForm(f => ({ ...f, anexos: [...(f.anexos ?? []), ax] }))}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -1140,18 +1300,19 @@ export default function ProntuarioPage({ navParams = {} }) {
             {activeSection === 'anamnese' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="form-group">
-                  <label className="form-label">Queixa principal / Tempo de evolução *</label>
-                  <input className="form-input" value={form.anamnese.queixa} onChange={e => updateAnamnese('queixa', e.target.value)} disabled={isReadOnly} placeholder="Motivo da consulta e tempo de evolução" />
+                  <label className="form-label">Queixa principal / Tempo de evolução * {flashFields['anamnese.queixa'] && <span title="Preenchido por voz">🎤</span>}</label>
+                  <input className="form-input" value={form.anamnese.queixa} onChange={e => updateAnamnese('queixa', e.target.value)} disabled={isReadOnly} placeholder="Motivo da consulta e tempo de evolução"
+                    style={{ background: flashFields['anamnese.queixa'] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Histórico</label>
+                  <label className="form-label">Histórico {flashFields['anamnese.historiaAtual'] && <span title="Preenchido por voz">🎤</span>}</label>
                   <textarea className="form-textarea" value={form.anamnese.historiaAtual} onChange={e => updateAnamnese('historiaAtual', e.target.value)} disabled={isReadOnly}
-                    placeholder="Descreva o histórico clínico, início, evolução..." style={{ resize: 'none', overflowY: 'auto', maxHeight: 140, minHeight: 80 }} />
+                    placeholder="Descreva o histórico clínico, início, evolução..." style={{ resize: 'none', overflowY: 'auto', maxHeight: 140, minHeight: 80, background: flashFields['anamnese.historiaAtual'] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Cirurgias anteriores</label>
+                  <label className="form-label">Cirurgias anteriores {flashFields['anamnese.historicoPrevio'] && <span title="Preenchido por voz">🎤</span>}</label>
                   <textarea className="form-textarea" value={form.anamnese.historicoPrevio} onChange={e => updateAnamnese('historicoPrevio', e.target.value)} disabled={isReadOnly}
-                    placeholder="Cirurgias, doenças anteriores, medicamentos contínuos..." style={{ resize: 'none', overflowY: 'auto', maxHeight: 120, minHeight: 64 }} />
+                    placeholder="Cirurgias, doenças anteriores, medicamentos contínuos..." style={{ resize: 'none', overflowY: 'auto', maxHeight: 120, minHeight: 64, background: flashFields['anamnese.historicoPrevio'] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }} />
                 </div>
                 <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
                   <SelectField label="Status vacinal" value={form.anamnese.statusVacinal} onChange={v => updateAnamnese('statusVacinal', v)} ro={isReadOnly} options={['Em dia', 'Atrasada', 'Desconhecida']} />
@@ -1420,8 +1581,8 @@ export default function ProntuarioPage({ navParams = {} }) {
                     </div>
 
                     <div className="form-group" style={{ gridColumn: '1 / -1', maxWidth: 340 }}>
-                      <label className="form-label">Intensidade do prurido — 0 (ausente) a 10 (intenso)</label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <label className="form-label">Intensidade do prurido — 0 (ausente) a 10 (intenso) {flashFields['derma.pruridoIntensidade'] && <span title="Preenchido por voz">🎤</span>}</label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: flashFields['derma.pruridoIntensidade'] ? 4 : 0, background: flashFields['derma.pruridoIntensidade'] ? 'var(--teal-light)' : undefined, borderRadius: 8, transition: 'background 1s ease' }}>
                         <input type="range" min="0" max="10" step="1"
                           value={dVal('pruridoIntensidade') || 0}
                           onChange={e => dUpd('pruridoIntensidade', e.target.value)}
@@ -1455,7 +1616,8 @@ export default function ProntuarioPage({ navParams = {} }) {
 
                   {/* SEÇÃO 4 — Tipos de lesão */}
                   {sectionTitle('Seção 4 — Tipos de Lesão')}
-                  <div className="form-grid prontuario-lesao-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                  {flashFields['derma.tiposLesao'] && <span title="Preenchido por voz" style={{ marginTop: -10, marginBottom: 4 }}>🎤 atualizado por voz</span>}
+                  <div className="form-grid prontuario-lesao-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, padding: flashFields['derma.tiposLesao'] ? 4 : 0, background: flashFields['derma.tiposLesao'] ? 'var(--teal-light)' : undefined, borderRadius: 8, transition: 'background 1s ease' }}>
                     {LESAO_TYPES.map(lesao => {
                       const sel = dArr('tiposLesao').includes(lesao)
                       return (
@@ -1929,19 +2091,19 @@ export default function ProntuarioPage({ navParams = {} }) {
 
                 <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px 20px' }}>
                   <VitalField label="Temperatura (°C)" value={form.vitals.temperatura} onChange={v => updateVitals('temperatura', v)} ro={isReadOnly} placeholder="38.0 – 39.4"
-                    classification={classifyTemp(form.vitals.temperatura)} />
+                    classification={classifyTemp(form.vitals.temperatura)} flash={flashFields['vitals.temperatura']} />
                   <VitalField label={`FC — bpm${especie === 'Cão' ? ' (60-120)' : especie === 'Gato' ? ' (140-220)' : ''}`} value={form.vitals.fc} onChange={v => updateVitals('fc', v)} ro={isReadOnly}
                     placeholder={especie === 'Cão' ? '60–120' : especie === 'Gato' ? '140–220' : 'bpm'}
-                    classification={classifyFC(form.vitals.fc, especie)} />
+                    classification={classifyFC(form.vitals.fc, especie)} flash={flashFields['vitals.fc']} />
                   <VitalField label={`FR — mpm${especie === 'Cão' ? ' (12-30)' : especie === 'Gato' ? ' (20-30)' : ''}`} value={form.vitals.fr} onChange={v => updateVitals('fr', v)} ro={isReadOnly}
                     placeholder={especie === 'Cão' ? '12–30' : especie === 'Gato' ? '20–30' : 'mpm'}
-                    classification={classifyFR(form.vitals.fr, especie)} />
-                  <VitalField label="Peso (kg)" value={form.vitals.peso} onChange={v => updateVitals('peso', v)} ro={isReadOnly} placeholder="0.0" />
+                    classification={classifyFR(form.vitals.fr, especie)} flash={flashFields['vitals.fr']} />
+                  <VitalField label="Peso (kg)" value={form.vitals.peso} onChange={v => updateVitals('peso', v)} ro={isReadOnly} placeholder="0.0" flash={flashFields['vitals.peso']} />
                   <VitalField label="SpO₂ (%)" value={form.vitals.spo2} onChange={v => updateVitals('spo2', v)} ro={isReadOnly} placeholder="95–100" />
                   <VitalField label="TPC (seg)" value={form.vitals.tpc ?? form.vitals.trc ?? ''} onChange={v => updateVitals('tpc', v)} ro={isReadOnly} placeholder="< 2" />
                   <div className="form-group">
-                    <label className="form-label">Mucosas</label>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <label className="form-label">Mucosas {flashFields['vitals.mucosas'] && <span title="Preenchido por voz">🎤</span>}</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: flashFields['vitals.mucosas'] ? 4 : 0, background: flashFields['vitals.mucosas'] ? 'var(--teal-light)' : undefined, borderRadius: 8, transition: 'background 1s ease' }}>
                       {[
                         { value: 'Normocorada', color: '#E91E8C' },
                         { value: 'Hipocorada',  color: '#9E9E9E' },
@@ -1965,8 +2127,9 @@ export default function ProntuarioPage({ navParams = {} }) {
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Hidratação</label>
-                    <select className="form-select" value={form.vitals.hidratacao} onChange={e => updateVitals('hidratacao', e.target.value)} disabled={isReadOnly}>
+                    <label className="form-label">Hidratação {flashFields['vitals.hidratacao'] && <span title="Preenchido por voz">🎤</span>}</label>
+                    <select className="form-select" value={form.vitals.hidratacao} onChange={e => updateVitals('hidratacao', e.target.value)} disabled={isReadOnly}
+                      style={{ background: flashFields['vitals.hidratacao'] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }}>
                       {['<5%', '5-8%', '8-12%', '>12%'].map(o => <option key={o}>{o}</option>)}
                     </select>
                     {(() => { const cl = classifyHidratacao(form.vitals.hidratacao); return cl ? (
@@ -1977,7 +2140,7 @@ export default function ProntuarioPage({ navParams = {} }) {
                     options={['Normosfigmia', 'Bradisfigmia', 'Taquisfigmia']} />
                   <VitalField label={`Glicemia (mg/dL)${especie === 'Cão' ? ' (60-110)' : especie === 'Gato' ? ' (70-150)' : ''}`} value={form.vitals.glicemia ?? ''} onChange={v => updateVitals('glicemia', v)} ro={isReadOnly}
                     placeholder={especie === 'Cão' ? '60–110' : especie === 'Gato' ? '70–150' : 'mg/dL'}
-                    classification={classifyGlicemia(form.vitals.glicemia, especie)} />
+                    classification={classifyGlicemia(form.vitals.glicemia, especie)} flash={flashFields['vitals.glicemia']} />
                   <div className="form-group">
                     <label className="form-label">Diurese</label>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -2069,9 +2232,9 @@ export default function ProntuarioPage({ navParams = {} }) {
                             )
                           })}
                         </div>
-                        <input className="form-input" style={{ padding: '6px 10px', fontSize: '0.8125rem' }}
+                        <input className="form-input" style={{ padding: '6px 10px', fontSize: '0.8125rem', background: flashFields[`examesFisicos.${s.key}.obs`] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }}
                           value={data.obs ?? ''} onChange={e => !isReadOnly && updateExame(s.key, 'obs', e.target.value)}
-                          disabled={isReadOnly} placeholder="Observações..." />
+                          disabled={isReadOnly} placeholder={flashFields[`examesFisicos.${s.key}.obs`] ? 'Observações... 🎤' : 'Observações...'} />
                       </div>
                     )
                   }
@@ -2133,6 +2296,8 @@ export default function ProntuarioPage({ navParams = {} }) {
                 aplicacoes={form.aplicacoes ?? []}
                 onChange={arr => setForm(f => ({ ...f, aplicacoes: arr }))}
                 isReadOnly={isReadOnly}
+                especie={especie}
+                petWeight={parseFloat(petsLS.find(p => p.id === form.petId)?.weight || 0)}
               />
             )}
 
@@ -2148,18 +2313,94 @@ export default function ProntuarioPage({ navParams = {} }) {
               />
             )}
 
+            {/* DIAGNÓSTICO DIFERENCIAL (IA) */}
+            {activeSection === 'diagnostico-diferencial' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="form-group">
+                  <label className="form-label">Transcrição da consulta</label>
+                  <textarea className="form-textarea" readOnly={!editandoTranscricao}
+                    value={form.transcricaoCompleta || ''}
+                    onChange={e => setForm(f => ({ ...f, transcricaoCompleta: e.target.value }))}
+                    placeholder="A transcrição da gravação aparecerá aqui durante a consulta..."
+                    style={{ resize: 'none', overflowY: 'auto', minHeight: 160, maxHeight: 320, whiteSpace: 'pre-wrap', background: editandoTranscricao ? 'var(--surface)' : 'var(--surface-2)' }} />
+                </div>
+                {!isReadOnly && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-outline btn-sm" onClick={() => setEditandoTranscricao(e => !e)}>
+                      {editandoTranscricao ? '✅ Concluir edição' : '✏️ Editar transcrição'}
+                    </button>
+                    <button className="btn btn-outline btn-sm" onClick={() => setForm(f => ({ ...f, transcricaoCompleta: '' }))} disabled={!form.transcricaoCompleta}>
+                      🗑️ Limpar transcrição
+                    </button>
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Observações gerais {flashFields['observacoesGerais'] && <span title="Preenchido por voz">🎤</span>}</label>
+                  <textarea className="form-textarea" value={form.observacoesGerais ?? ''} onChange={e => setForm(f => ({ ...f, observacoesGerais: e.target.value }))} disabled={isReadOnly}
+                    placeholder="Observações adicionais sobre a consulta..." style={{ resize: 'none', overflowY: 'auto', minHeight: 80, maxHeight: 160, background: flashFields['observacoesGerais'] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }} />
+                </div>
+
+                <div>
+                  <button className="btn btn-primary" onClick={gerarDiagnosticosIA} disabled={diagIALoading || isReadOnly}>
+                    {diagIALoading ? 'Gerando sugestões...' : '✨ Sugerir diagnósticos com IA'}
+                  </button>
+                </div>
+
+                {diagIAErro && <p style={{ color: 'var(--danger)', fontSize: '0.875rem' }}>{diagIAErro}</p>}
+
+                {form.diagnosticoIA && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {(form.diagnosticoIA.diagnosticos ?? []).map((d, i) => {
+                      const cor = d.probabilidade === 'Alta' ? 'var(--danger)' : d.probabilidade === 'Média' ? 'var(--warning)' : 'var(--text-muted)'
+                      return (
+                        <div key={i} style={{ padding: 14, borderRadius: 10, border: `2px solid ${cor}`, background: cor + '12' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontWeight: 700 }}>{d.nome}</span>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: cor }}>{d.probabilidade}</span>
+                          </div>
+                          {d.justificativa && <p style={{ fontSize: '0.875rem', marginBottom: 6 }}>{d.justificativa}</p>}
+                          {d.examesRecomendados && <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}><strong>Exames recomendados:</strong> {d.examesRecomendados}</p>}
+                          {d.tratamentoSugerido && <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}><strong>Tratamento sugerido:</strong> {d.tratamentoSugerido}</p>}
+                          {!isReadOnly && (
+                            <button className="btn btn-outline btn-sm" style={{ marginTop: 8 }} onClick={() => usarDiagnosticoSugerido(d.nome)}>
+                              Usar este diagnóstico
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {form.diagnosticoIA.alertas?.length > 0 && (
+                      <div style={{ padding: 12, borderRadius: 8, background: 'rgba(244,67,54,0.08)', border: '1px solid var(--danger)' }}>
+                        <p style={{ fontWeight: 700, color: 'var(--danger)', marginBottom: 4 }}>⚠️ Alertas</p>
+                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.875rem' }}>
+                          {form.diagnosticoIA.alertas.map((a, i) => <li key={i}>{a}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {form.diagnosticoIA.proximosPassos && (
+                      <div style={{ padding: 12, borderRadius: 8, background: 'var(--surface-2)' }}>
+                        <p style={{ fontWeight: 700, marginBottom: 4 }}>Próximos passos</p>
+                        <p style={{ fontSize: '0.875rem' }}>{form.diagnosticoIA.proximosPassos}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* DIAGNÓSTICO */}
             {activeSection === 'diagnostico' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div className="form-group">
-                  <label className="form-label">Diagnóstico diferencial</label>
+                  <label className="form-label">Diagnóstico diferencial {flashFields['diagnostico.diferencial'] && <span title="Preenchido por voz">🎤</span>}</label>
                   <textarea className="form-textarea" value={form.diagnostico.diferencial ?? ''} onChange={e => updateDiag('diferencial', e.target.value)} disabled={isReadOnly}
-                    placeholder="Diagnósticos diferenciais considerados..." style={{ resize: 'none', overflowY: 'auto', minHeight: 120, maxHeight: 300, whiteSpace: 'pre-wrap' }} />
+                    placeholder="Diagnósticos diferenciais considerados..." style={{ resize: 'none', overflowY: 'auto', minHeight: 120, maxHeight: 300, whiteSpace: 'pre-wrap', background: flashFields['diagnostico.diferencial'] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Diagnóstico</label>
+                  <label className="form-label">Diagnóstico {flashFields['diagnostico.definitivo'] && <span title="Preenchido por voz">🎤</span>}</label>
                   <textarea className="form-textarea" value={form.diagnostico.definitivo ?? ''} onChange={e => updateDiag('definitivo', e.target.value)} disabled={isReadOnly}
-                    placeholder="Diagnóstico principal..." style={{ resize: 'none', overflowY: 'auto', minHeight: 120, maxHeight: 300, whiteSpace: 'pre-wrap', borderColor: 'var(--teal)' }} />
+                    placeholder="Diagnóstico principal..." style={{ resize: 'none', overflowY: 'auto', minHeight: 120, maxHeight: 300, whiteSpace: 'pre-wrap', borderColor: 'var(--teal)', background: flashFields['diagnostico.definitivo'] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }} />
                 </div>
               </div>
             )}
@@ -2222,7 +2463,16 @@ export default function ProntuarioPage({ navParams = {} }) {
                         <div style={{ display: 'flex', gap: 8 }}>
                           <div style={{ flex: 1 }}>
                             <MedInput value={med.nome} onChange={v => updateMed(idx, 'nome', v)} disabled={isReadOnly}
-                              onSelect={p => { updateMed(idx, 'nome', p.name); if (!med.dose) updateMed(idx, 'dose', p.dosagem ?? '') }} />
+                              onSelect={p => {
+                                const u = { nome: p.name }
+                                if (p.bula) {
+                                  const dose = especie === 'Gato' ? (p.bula.doseGato || '') : (p.bula.doseCao || '')
+                                  if (!med.dose && dose) u.dose = dose
+                                  if (!med.via && p.bula.via) u.via = p.bula.via
+                                  if (!med.frequencia && p.bula.frequencia) u.frequencia = p.bula.frequencia
+                                } else if (p.dosagem && !med.dose) { u.dose = p.dosagem }
+                                updateMedMulti(idx, u)
+                              }} />
                           </div>
                           {(() => { const b = med.nome?.length >= 2 ? findBulaForPresc(med.nome) : null; return (
                             <button type="button" className="btn btn-ghost btn-sm"
@@ -2237,6 +2487,13 @@ export default function ProntuarioPage({ navParams = {} }) {
                       <div className="form-group">
                         <label className="form-label">Dose</label>
                         <input className="form-input" value={med.dose} onChange={e => updateMed(idx, 'dose', e.target.value)} disabled={isReadOnly} placeholder="Ex: 1 mg/kg" />
+                        {(() => {
+                          const b2 = med.nome?.length >= 2 ? findBulaForPresc(med.nome) : null
+                          const bulaDose = b2 ? (especie === 'Gato' ? b2.doseGato : b2.doseCao) : null
+                          const petPeso = parseFloat(petsLS.find(p => p.id === form.petId)?.weight || 0)
+                          return <DoseBadge bulaDose={bulaDose} peso={petPeso} disabled={isReadOnly}
+                            onUsar={() => { const c = parseDose(bulaDose, petPeso); if (c) updateMed(idx, 'dose', `${c.valor}${c.unit}`) }} />
+                        })()}
                       </div>
                       <div className="form-group">
                         <label className="form-label">Via</label>
@@ -2306,9 +2563,9 @@ export default function ProntuarioPage({ navParams = {} }) {
                   </div>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Orientações ao tutor</label>
+                  <label className="form-label">Orientações ao tutor {flashFields['prescricao.orientacoes'] && <span title="Preenchido por voz">🎤</span>}</label>
                   <textarea className="form-textarea" value={form.prescricao.orientacoes} onChange={e => updatePrescricao('orientacoes', e.target.value)} disabled={isReadOnly}
-                    placeholder="Restrições, cuidados em casa, sinais de alerta..." style={{ resize: 'none', overflowY: 'auto', maxHeight: 140, minHeight: 80 }} />
+                    placeholder="Restrições, cuidados em casa, sinais de alerta..." style={{ resize: 'none', overflowY: 'auto', maxHeight: 140, minHeight: 80, background: flashFields['prescricao.orientacoes'] ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }} />
                 </div>
               </div>
             )}
@@ -2354,6 +2611,53 @@ export default function ProntuarioPage({ navParams = {} }) {
             }
           </div>
         </div>
+
+        {/* Toast de preenchimento por voz */}
+        {vozToast && (
+          <div className="no-print" style={{
+            position: 'fixed', bottom: 90, right: 16, zIndex: 1350, background: 'var(--surface)',
+            border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-lg)',
+            padding: '12px 16px', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 8,
+          }}>
+            {vozToast.pendente ? (
+              <>
+                <span style={{ fontSize: '0.85rem' }}>Preencher <strong>{vozToast.label}</strong> com "{vozToast.valor}"?</span>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-outline btn-sm" onClick={() => setVozToast(null)}>Não</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => aplicarValorComando(vozToast.pendente)}>Sim</button>
+                </div>
+              </>
+            ) : (
+              <span style={{ fontSize: '0.85rem' }}>✓ {vozToast.label} preenchido por voz: "{vozToast.valor}"</span>
+            )}
+          </div>
+        )}
+
+        {/* Log lateral de comandos de voz reconhecidos */}
+        {vozLog.length > 0 && (
+          <div className="no-print" style={{ position: 'fixed', top: '50%', right: 0, transform: 'translateY(-50%)', zIndex: 1250, display: 'flex', alignItems: 'flex-start' }}>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setVozLogAberto(v => !v)}
+              style={{ borderRadius: '8px 0 0 8px', borderRight: 'none', writingMode: 'vertical-rl', padding: '10px 6px' }}>
+              🎤 Log {vozLogAberto ? '▶' : '◀'}
+            </button>
+            {vozLogAberto && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px 0 0 8px', boxShadow: 'var(--shadow-lg)', padding: 12, width: 260, maxHeight: '60vh', overflowY: 'auto' }}>
+                <p style={{ fontWeight: 700, fontSize: '0.8125rem', margin: '0 0 8px' }}>Comandos reconhecidos</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {vozLog.map(item => (
+                    <div key={item.id} style={{ fontSize: '0.75rem', borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+                        <strong>{item.label}</strong>
+                        <span style={{ color: 'var(--text-muted)' }}>{item.hora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(item.valor)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -2977,11 +3281,12 @@ export default function ProntuarioPage({ navParams = {} }) {
 // ---- Helpers ----
 function fmtMapa(m) { return m ? m.replace(/^mapa[-\s]*/i, '') : '' }
 
-function VitalField({ label, value, onChange, ro, placeholder, classification }) {
+function VitalField({ label, value, onChange, ro, placeholder, classification, flash }) {
   return (
     <div className="form-group">
-      <label className="form-label">{label}</label>
-      <input className="form-input" type="number" step="0.1" value={value} onChange={e => onChange(e.target.value)} disabled={ro} placeholder={placeholder} />
+      <label className="form-label">{label} {flash && <span title="Preenchido por voz">🎤</span>}</label>
+      <input className="form-input" type="number" step="0.1" value={value} onChange={e => onChange(e.target.value)} disabled={ro} placeholder={placeholder}
+        style={{ background: flash ? 'var(--teal-light)' : undefined, transition: 'background 1s ease' }} />
       {classification && (
         <span style={{ fontSize: '0.75rem', fontWeight: 600, color: classification.color, marginTop: 4, display: 'block' }}>
           ● {classification.label}
@@ -3827,7 +4132,7 @@ function MedInput({ value, onChange, onSelect, disabled }) {
     const bulario = (() => { try { return JSON.parse(localStorage.getItem('petvet-bulario') ?? '[]') } catch { return [] } })()
     return [
       ...produtos.filter(p => normIncludes(p.name, value)).slice(0, 4).map(p => ({ id: `p-${p.id}`, label: p.name, sub: p.category ?? '', onSel: () => onSelect(p) })),
-      ...bulario.filter(m => normIncludes(m.nomeComercial, value) || normIncludes(m.nomeGenerico, value)).slice(0, 4).map(m => ({ id: `b-${m.id}`, label: m.nomeComercial, sub: m.nomeGenerico ?? '', onSel: () => onSelect({ name: m.nomeComercial }) })),
+      ...bulario.filter(m => normIncludes(m.nomeComercial, value) || normIncludes(m.nomeGenerico, value)).slice(0, 4).map(m => ({ id: `b-${m.id}`, label: m.nomeComercial, sub: [m.nomeGenerico, m.categoria].filter(Boolean).join(' · '), onSel: () => onSelect({ name: m.nomeComercial, bula: m }) })),
     ].slice(0, 8)
   })() : []
 
@@ -3883,7 +4188,7 @@ function VacinasSection({ petId, petInfo, vacinasAplicadas, onChange, isReadOnly
     return d.toISOString().slice(0, 10)
   }
 
-  function addRow() { onChange([...vacinasAplicadas, emptyRow()]) }
+  function addRow() { onChange([emptyRow(), ...vacinasAplicadas]) }
   function removeRow(i) {
     const removedProtoId = vacinasAplicadas[i]?.protocoloId ?? null
     if (removedProtoId) onProtocolChange?.(removedProtoId, null)
@@ -4277,16 +4582,78 @@ function CirurgiaSection({ procedimentos, mesmoVet, vetUnicoId, vets, isReadOnly
   )
 }
 
+// ---- Cálculo de dose por peso ----
+function parseDose(doseStr, peso) {
+  if (!doseStr || !peso || peso <= 0) return null
+  const s = doseStr.trim()
+  // X mg/kg, X ml/kg, X mcg/kg, X UI/kg, X gotas/kg
+  const m1 = s.match(/^([\d.,]+)\s*(mg|ml|mcg|g|UI|gotas?)\s*\/\s*kg$/i)
+  if (m1) {
+    const val = parseFloat(m1[1].replace(',', '.'))
+    const unit = m1[2]
+    if (!isNaN(val)) {
+      const total = parseFloat((val * peso).toFixed(4))
+      const fmt = total % 1 === 0 ? String(total) : total.toFixed(2).replace(/\.?0+$/, '')
+      return { valor: fmt, unit, formula: `${val}${unit}/kg × ${peso}kg = ${fmt}${unit}` }
+    }
+  }
+  // X comp/Ykg (ex: "1 comp/10kg", "0,5 comp/5kg")
+  const m2 = s.match(/^([\d.,]+)\s*comp(?:rimido)?\s*\/\s*([\d.,]+)\s*kg$/i)
+  if (m2) {
+    const n = parseFloat(m2[1].replace(',', '.'))
+    const kg = parseFloat(m2[2].replace(',', '.'))
+    if (!isNaN(n) && !isNaN(kg) && kg > 0) {
+      const total = Math.ceil(peso / kg) * n
+      return { valor: String(total), unit: 'comp', formula: `${n} comp/${kg}kg × ${peso}kg = ${total} comp` }
+    }
+  }
+  return null
+}
+
+function DoseBadge({ bulaDose, peso, onUsar, disabled }) {
+  if (!bulaDose) return null
+  if (!peso || peso <= 0) {
+    return (
+      <p style={{ fontSize: '0.72rem', color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', padding: '3px 8px', borderRadius: 4, margin: '4px 0 0' }}>
+        ⚠️ Cadastre o peso do pet para calcular a dose
+      </p>
+    )
+  }
+  const calc = parseDose(bulaDose, peso)
+  if (calc) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.72rem', color: '#166534', background: '#dcfce7', border: '1px solid #86efac', padding: '3px 8px', borderRadius: 4 }}>
+          💊 {calc.formula}
+        </span>
+        {!disabled && (
+          <button type="button" className="btn btn-ghost btn-sm"
+            style={{ fontSize: '0.72rem', padding: '2px 7px', color: '#166534', border: '1px solid #86efac' }}
+            onClick={onUsar}>Usar</button>
+        )}
+      </div>
+    )
+  }
+  if (!bulaDose.toLowerCase().includes('/kg')) {
+    return (
+      <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+        ℹ️ Dose fixa — verificar bula
+      </p>
+    )
+  }
+  return null
+}
+
 // ---- Aplicações Section ----
 const APLICACAO_VIA = ['SC', 'IM', 'IV', 'Intranasal', 'VO', 'Otológica', 'Ocular']
 
-function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
+function AplicacoesSection({ aplicacoes, onChange, isReadOnly, especie, petWeight }) {
   const [bulario] = usePersistentState('petvet-bulario', [])
   const [suggest, setSuggest] = useState({})
   const [bulaMed, setBulaMed] = useState(null)
 
   const emptyRow = () => ({ nome: '', dose: '', via: 'SC' })
-  function addRow() { onChange([...aplicacoes, emptyRow()]) }
+  function addRow() { onChange([emptyRow(), ...aplicacoes]) }
   function removeRow(i) { onChange(aplicacoes.filter((_, idx) => idx !== i)) }
   function updateRow(i, key, val) { const arr = [...aplicacoes]; arr[i] = { ...arr[i], [key]: val }; onChange(arr) }
   function findBula(nome) { return bulario.find(m => norm(m.nomeComercial) === norm(nome) || normIncludes(m.nomeComercial, nome)) ?? null }
@@ -4316,9 +4683,15 @@ function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
                   <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-md)', zIndex: 200, maxHeight: 180, overflowY: 'auto' }}>
                     {hits.map(m => (
                       <div key={m.id} style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.8125rem', borderBottom: '1px solid var(--border)' }}
-                        onMouseDown={() => { updateRow(i, 'nome', m.nomeComercial); setSuggest(s => ({ ...s, [i]: false })) }}>
+                        onMouseDown={() => {
+                          const dose = especie === 'Gato' ? (m.doseGato || '') : (m.doseCao || '')
+                          const arr = [...aplicacoes]
+                          arr[i] = { ...arr[i], nome: m.nomeComercial, ...(!arr[i].dose && dose ? { dose } : {}), ...(!arr[i].via && m.via ? { via: m.via } : {}) }
+                          onChange(arr)
+                          setSuggest(s => ({ ...s, [i]: false }))
+                        }}>
                         <span style={{ fontWeight: 600 }}>{m.nomeComercial}</span>
-                        {m.nomeGenerico && <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: '0.75rem' }}>{m.nomeGenerico}</span>}
+                        <span style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: '0.75rem' }}>{[m.nomeGenerico, m.categoria].filter(Boolean).join(' · ')}</span>
                       </div>
                     ))}
                   </div>
@@ -4328,6 +4701,11 @@ function AplicacoesSection({ aplicacoes, onChange, isReadOnly }) {
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Dose</label>
               <input className="form-input" value={row.dose} onChange={e => updateRow(i, 'dose', e.target.value)} disabled={isReadOnly} placeholder="Ex: 1 mg/kg" />
+              {(() => {
+                const bulaDose = bula ? (especie === 'Gato' ? bula.doseGato : bula.doseCao) : null
+                return <DoseBadge bulaDose={bulaDose} peso={petWeight || 0} disabled={isReadOnly}
+                  onUsar={() => { const c = parseDose(bulaDose, petWeight); if (c) updateRow(i, 'dose', `${c.valor}${c.unit}`) }} />
+              })()}
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label" style={{ fontSize: '0.75rem' }}>Via</label>

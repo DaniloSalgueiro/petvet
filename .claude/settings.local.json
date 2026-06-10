@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(findstr /C:\"anthropic\" /C:\"dependencies\")",
+      "Bash(node -e \"const t = 'café maçã coração'; console.log\\(t.normalize\\('NFD'\\).replace\\(/[̀-ͯ]/g, ''\\).toLowerCase\\(\\)\\)\")",
+      "Bash(npx vite *)",
+      "Bash(dir /s /b \"C:\\\\Users\\\\danilo.toledo\\\\OneDrive - A1 Engenharia e Gerenciamento\\\\Área de Trabalho\\\\Danilo\\\\PROGRAMACAO\\\\pet\\\\src\")",
+      "Bash(powershell *)",
+      "Bash(Select-Object -Last 100)",
+      "Bash(python3 -c ' *)",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\danilo.toledo\\\\OneDrive - A1 Engenharia e Gerenciamento\\\\Área de Trabalho\\\\Danilo\\\\PROGRAMACAO\\\\pet\\\\src\\\\pages\\\\Prontuario.jsx\" | Measure-Object -Line\\).Lines)",
+      "PowerShell(Test-Path *)",
+      "Bash(node -e \"const {RACAS_INICIAIS}=require\\('./src/data/racas.js'\\);const cao=RACAS_INICIAIS.filter\\(r=>r.species==='Cão'\\).length;const gato=RACAS_INICIAIS.filter\\(r=>r.species==='Gato'\\).length;const outro=RACAS_INICIAIS.filter\\(r=>r.species==='Outro'\\).length;console.log\\('Cão:',cao,'Gato:',gato,'Outro:',outro,'Total:',RACAS_INICIAIS.length\\)\")",
+      "PowerShell(Set-Content *)",
+      "PowerShell($content = Get-Content \"C:\\\\Users\\\\danilo.toledo\\\\OneDrive - A1 Engenharia e Gerenciamento\\\\Área de Trabalho\\\\Danilo\\\\PROGRAMACAO\\\\pet\\\\src\\\\pages\\\\Prontuario.jsx\" -Encoding UTF8; $i = 0; $content | ForEach-Object { $i++; if \\($_ -match \"bula|Bula|Ver bula\"\\) { \"$i`: $_\" } })",
+      "PowerShell($content = Get-Content \"C:\\\\Users\\\\danilo.toledo\\\\OneDrive - A1 Engenharia e Gerenciamento\\\\Área de Trabalho\\\\Danilo\\\\PROGRAMACAO\\\\pet\\\\src\\\\pages\\\\Prontuario.jsx\" -Encoding UTF8; $i = 0; $content | ForEach-Object { $i++; if \\($_ -match \"ermo|ERRO\"\\) { \"$i`: $_\" } } | Select-Object -First 50)",
+      "PowerShell($content = Get-Content \"C:\\\\Users\\\\danilo.toledo\\\\OneDrive - A1 Engenharia e Gerenciamento\\\\Área de Trabalho\\\\Danilo\\\\PROGRAMACAO\\\\pet\\\\src\\\\pages\\\\Prontuario.jsx\" -Encoding UTF8; $i = 0; $content | ForEach-Object { $i++; if \\($_ -match \"Prescri|prescri|PrescricaoSection\"\\) { \"$i`: $_\" } })",
+      "PowerShell($content = Get-Content \"C:\\\\Users\\\\danilo.toledo\\\\OneDrive - A1 Engenharia e Gerenciamento\\\\Área de Trabalho\\\\Danilo\\\\PROGRAMACAO\\\\pet\\\\src\\\\pages\\\\Prontuario.jsx\" -Encoding UTF8; $i = 0; $content | ForEach-Object { $i++; if \\($_ -match \"TermosSection|petvet-clinica\"\\) { \"$i`: $_\" } })",
+      "PowerShell($content = Get-Content \"C:\\\\Users\\\\danilo.toledo\\\\OneDrive - A1 Engenharia e Gerenciamento\\\\Área de Trabalho\\\\Danilo\\\\PROGRAMACAO\\\\pet\\\\src\\\\pages\\\\Prontuario.jsx\" -Encoding UTF8; $i = 0; $content | ForEach-Object { $i++; if \\($_ -match \"calcIdade|fmtMapa|getPetAge\"\\) { \"$i`: $_\" } })",
+      "Bash(Remove-Item *)",
+      "Bash(dir node_modules)",
+      "Bash(findstr workbox *)",
+      "Bash(dir dist *)",
+      "Bash(findstr -E \"\\\\.json|sw\\\\.\")",
+      "Bash(rmdir netlify/functions)",
+      "Bash(rmdir netlify *)",
+      "Bash(node -e \"const { BULARIO_PARTE1 } = require\\('./src/data/bulario.js'\\); const cats = [...new Set\\(BULARIO_PARTE1.map\\(m => m.categoria\\)\\)].sort\\(\\); console.log\\(JSON.stringify\\(cats, null, 2\\)\\); console.log\\('Total:', BULARIO_PARTE1.length\\);\")",
+      "Bash(node -e \"const { BULARIO_INICIAL } = require\\('./src/data/bulario.js'\\); const derm = BULARIO_INICIAL.filter\\(m => m.categoria === 'Dermatológico'\\); console.log\\('Total:', BULARIO_INICIAL.length\\); console.log\\('Dermatológicos:', derm.length\\); derm.forEach\\(m => console.log\\(' -', m.id, m.nomeComercial, '|', m.nomeGenerico\\)\\);\")",
+      "Bash(node -e \"const {BULARIO_INICIAL}=require\\('./src/data/bulario.js'\\); console.log\\('Total:', BULARIO_INICIAL.length\\); const cats={}; BULARIO_INICIAL.forEach\\(m=>{cats[m.categoria]=\\(cats[m.categoria]||0\\)+1}\\); Object.entries\\(cats\\).sort\\(\\).forEach\\(\\([k,v]\\)=>console.log\\(' ',k+':',v\\)\\)\")",
+      "Bash(node -e \"const b = require\\('./src/data/bulario.js'\\); console.log\\('total:', b.BULARIO_INICIAL?.length\\)\")",
+      "Bash(Test-Path *)",
+      "Bash(node -e \"const b = require\\('./src/data/bulario.js'\\); console.log\\('entries:', b.BULARIO_INICIAL?.length\\)\")",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(Object.keys\\({...p.dependencies,...p.devDependencies}\\)\\)\\)\")",
+      "Bash(sort -t b -k2 -n)",
+      "Bash(node scripts/check-bulario.mjs)"
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Plus, X, Settings } from 'lucide-react'
 import { usePersistentState } from '../hooks/usePersistentState'
-import { DEFAULT_PRONTUARIO_CONFIG, SECTIONS_CONFIGURABLES, TIPOS_CONSULTA_DEFAULT } from './Prontuario'
+import { DEFAULT_PRONTUARIO_CONFIG, DEFAULT_GRAVACAO_CONFIG, SECTIONS_CONFIGURABLES, TIPOS_CONSULTA_DEFAULT } from './Prontuario'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
 
@@ -26,9 +26,25 @@ function buildDefaultSectionConfig(tipos) {
 export default function ProntuarioConfigPage() {
   const [config, setConfig] = usePersistentState('petvet-prontuario-config', DEFAULT_PRONTUARIO_CONFIG)
   const [clinica, setClinica] = usePersistentState('petvet-clinica-config', DEFAULT_CLINICA_CONFIG)
+  const [gravacaoConfig, setGravacaoConfig] = usePersistentState('petvet-config-gravacao', DEFAULT_GRAVACAO_CONFIG)
+  const [comandosVozCustom, setComandosVozCustom] = usePersistentState('petvet-comandos-voz', [])
   const [newTipo, setNewTipo] = useState('')
   const [cropSrc, setCropSrc] = useState(null)
   const [cropField, setCropField] = useState(null)
+  const [novoComando, setNovoComando] = useState({ frase: '', campo: '', label: '', tipo: 'texto' })
+
+  function addComandoVoz() {
+    const frase = novoComando.frase.trim()
+    const campo = novoComando.campo.trim()
+    const label = novoComando.label.trim() || frase
+    if (!frase || !campo) return
+    setComandosVozCustom(list => [...(list ?? []), { id: `custom-${Date.now()}`, frases: [frase], campo, label, tipo: novoComando.tipo }])
+    setNovoComando({ frase: '', campo: '', label: '', tipo: 'texto' })
+  }
+
+  function removeComandoVoz(id) {
+    setComandosVozCustom(list => (list ?? []).filter(c => c.id !== id))
+  }
 
   function handleLogoFile(field, file) {
     const reader = new FileReader()
@@ -219,6 +235,111 @@ export default function ProntuarioConfigPage() {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Configurações de Gravação */}
+      <div className="card" style={{ padding: '20px' }}>
+        <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', marginBottom: 16 }}>🎙️ Configurações de Gravação</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 20px' }}>
+          <div className="form-group">
+            <label className="form-label">Idioma do reconhecimento de voz</label>
+            <select className="form-select" value={gravacaoConfig.idioma ?? 'pt-BR'} onChange={e => setGravacaoConfig(c => ({ ...c, idioma: e.target.value }))}>
+              <option value="pt-BR">Português (Brasil)</option>
+              <option value="en-US">English (US)</option>
+              <option value="es-ES">Español</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Qualidade do áudio</label>
+            <select className="form-select" value={gravacaoConfig.qualidadeAudio ?? 'media'} onChange={e => setGravacaoConfig(c => ({ ...c, qualidadeAudio: e.target.value }))}>
+              <option value="baixa">Baixa</option>
+              <option value="media">Média</option>
+              <option value="alta">Alta</option>
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+            <label className="form-label">Sensibilidade do microfone: {gravacaoConfig.sensibilidade ?? 1}x</label>
+            <input type="range" min="0.5" max="3" step="0.1" value={gravacaoConfig.sensibilidade ?? 1}
+              onChange={e => setGravacaoConfig(c => ({ ...c, sensibilidade: Number(e.target.value) }))}
+              style={{ width: '100%', accentColor: 'var(--teal)' }} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Confirmar antes de preencher campo</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['Não', 'Sim'].map(o => {
+                const sel = (gravacaoConfig.confirmarAntes ?? false) === (o === 'Sim')
+                return (
+                  <button key={o} type="button" className={sel ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
+                    onClick={() => setGravacaoConfig(c => ({ ...c, confirmarAntes: o === 'Sim' }))}>
+                    {o}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Salvar áudio automaticamente</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {['Não', 'Sim'].map(o => {
+                const sel = (gravacaoConfig.salvarAudioAuto ?? true) === (o === 'Sim')
+                return (
+                  <button key={o} type="button" className={sel ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm'}
+                    onClick={() => setGravacaoConfig(c => ({ ...c, salvarAudioAuto: o === 'Sim' }))}>
+                    {o}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <hr className="divider" style={{ margin: '18px 0' }} />
+
+        <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: 10 }}>Comandos de voz personalizados</p>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+          Crie atalhos de voz para preencher campos específicos. Ex: frase "adicionar antipulgas" preenchendo o campo "derma.antipulgas".
+        </p>
+
+        {(comandosVozCustom ?? []).length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+            {comandosVozCustom.map(c => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: '0.8125rem' }}>
+                <span style={{ flex: 1 }}>
+                  <strong>"{c.frases?.[0]}"</strong> → <code>{c.campo}</code> <span style={{ color: 'var(--text-muted)' }}>({c.label}, {c.tipo})</span>
+                </span>
+                <button onClick={() => removeComandoVoz(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 0, lineHeight: 1, display: 'flex' }}>
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.4fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+          <div className="form-group">
+            <label className="form-label">Frase de comando</label>
+            <input className="form-input" placeholder='Ex: "adicionar antipulgas"' value={novoComando.frase} onChange={e => setNovoComando(c => ({ ...c, frase: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Campo de destino</label>
+            <input className="form-input" placeholder="Ex: derma.antipulgas" value={novoComando.campo} onChange={e => setNovoComando(c => ({ ...c, campo: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Rótulo</label>
+            <input className="form-input" placeholder="Ex: Antipulgas" value={novoComando.label} onChange={e => setNovoComando(c => ({ ...c, label: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Tipo</label>
+            <select className="form-select" value={novoComando.tipo} onChange={e => setNovoComando(c => ({ ...c, tipo: e.target.value }))}>
+              <option value="texto">Texto</option>
+              <option value="numero">Número</option>
+              <option value="add-array">Lista (adicionar item)</option>
+            </select>
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={addComandoVoz} disabled={!novoComando.frase.trim() || !novoComando.campo.trim()}>
+            <Plus size={14} /> Adicionar
+          </button>
         </div>
       </div>
 

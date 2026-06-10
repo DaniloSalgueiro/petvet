@@ -1,6 +1,8 @@
-import { Users, Calendar, Package, DollarSign, AlertTriangle } from 'lucide-react'
-import { AGENDAMENTOS, PETS, LANCAMENTOS, PRODUTOS, getDaysUntilExpiry } from '../data/mock'
+import { Users, Calendar, Package, DollarSign, AlertTriangle, Settings, BookOpen } from 'lucide-react'
+import { AGENDAMENTOS, PETS, LANCAMENTOS, PRODUTOS, USUARIOS, getDaysUntilExpiry } from '../data/mock'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { useAuth } from '../context/AuthContext'
+import { isSuporteAtivo } from '../lib/devAccess'
 
 const TODAY = '2026-05-14'
 
@@ -8,7 +10,95 @@ const STATUS_COLOR = { agendado: 'neutral', confirmado: 'teal', 'em-atendimento'
 const STATUS_LABEL = { agendado: 'Agendado', confirmado: 'Confirmado', 'em-atendimento': 'Em atendimento', concluido: 'Concluído', cancelado: 'Cancelado' }
 const TYPE_LABEL = { consulta: 'Consulta', retorno: 'Retorno', cirurgia: 'Cirurgia', vacina: 'Vacina', banho: 'Banho & Tosa', sobanho: 'Banho', tosa: 'Tosa', outros: 'Outros' }
 
+function DevDashboard({ navigateTo }) {
+  const [petsLS]    = usePersistentState('petvet-pets',    PETS)
+  const [usuariosLS] = usePersistentState('petvet-usuarios', USUARIOS)
+  const suporteAtivo = isSuporteAtivo()
+  const totalPets     = (Array.isArray(petsLS)    ? petsLS    : PETS).length
+  const totalUsuarios = (Array.isArray(usuariosLS) ? usuariosLS : USUARIOS).length
+
+  try {
+    const cfg = JSON.parse(localStorage.getItem('petvet-ss-config') ?? '{}')
+    const plano = cfg.plano || 'pro'
+    var planoLabel = { basico:'Básico', plus:'Plus', pro:'Pro' }[plano] || plano
+  } catch { var planoLabel = '—' }
+
+  const stats = [
+    { label:'Total de pets cadastrados', value: totalPets,     icon: Users,    variant:'teal' },
+    { label:'Usuários do sistema',        value: totalUsuarios, icon: Users,    variant:'magenta' },
+    { label:'Plano ativo',                value: planoLabel,    icon: Settings, variant:'success' },
+    { label:'Modo Suporte',               value: suporteAtivo ? 'Ativo' : 'Inativo',
+      icon: BookOpen, variant: suporteAtivo ? 'warning' : 'neutral' },
+  ]
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <div>
+          <h2 className="page-title">Painel do Desenvolvedor</h2>
+          <p className="page-subtitle">Métricas técnicas — dados pessoais protegidos por LGPD</p>
+        </div>
+      </div>
+
+      <div style={{ padding:'12px 16px', background:'rgba(212,175,55,0.1)', border:'1px solid rgba(212,175,55,0.35)', borderRadius:8, fontSize:'0.8125rem', color:'#92400e' }}>
+        <strong>🔒 Modo Desenvolvedor ativo.</strong> Dados clínicos, financeiros e pessoais de clientes estão ocultos.
+        {suporteAtivo
+          ? ' O cliente autorizou acesso temporário — todos os módulos estão disponíveis.'
+          : ' Para acesso a dados, solicite autorização em Configurações → Suporte Técnico.'}
+      </div>
+
+      <div className="stats-grid">
+        {stats.map(stat => {
+          const Icon = stat.icon
+          return (
+            <div key={stat.label} className="stat-card">
+              <div className={`stat-icon stat-icon-${stat.variant}`}><Icon size={20} /></div>
+              <div>
+                <div className="stat-value">{stat.value}</div>
+                <div className="stat-label">{stat.label}</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="dash-panels-grid">
+        <div className="card">
+          <h3 style={{ fontSize:'0.9375rem', fontWeight:700, color:'var(--text-primary)', marginBottom:12 }}>Acesso rápido</h3>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {[
+              { label:'Configurações do sistema', page:'configuracoes' },
+              { label:'Bulário veterinário',       page:'bulario' },
+              { label:'Raças cadastradas',         page:'racas' },
+              { label:'Config. Prontuário',        page:'prontuario-config' },
+            ].map(item => (
+              <button key={item.page} className="btn btn-outline btn-sm"
+                style={{ justifyContent:'flex-start' }}
+                onClick={() => navigateTo(item.page)}>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="card">
+          <h3 style={{ fontSize:'0.9375rem', fontWeight:700, color:'var(--text-primary)', marginBottom:12 }}>Suporte Técnico</h3>
+          <p style={{ fontSize:'0.875rem', color:'var(--text-muted)', marginBottom:12, lineHeight:1.6 }}>
+            Para acessar dados do cliente durante suporte técnico, o administrador da clínica deve autorizar
+            o acesso temporário em <strong>Configurações → Suporte Técnico</strong>.
+          </p>
+          <p style={{ fontSize:'0.8125rem', color: suporteAtivo ? '#166534' : 'var(--text-muted)', fontWeight: suporteAtivo ? 700 : 400 }}>
+            Status: {suporteAtivo ? '✓ Autorização ativa (24h)' : 'Não autorizado'}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard({ navigateTo }) {
+  const { user } = useAuth()
+  if (user?.role === 'dev') return <DevDashboard navigateTo={navigateTo} />
+
   const [rawAgendamentos] = usePersistentState('petvet-agendamentos', AGENDAMENTOS)
   const [petsLS] = usePersistentState('petvet-pets', PETS)
   const [produtosLS] = usePersistentState('petvet-produtos', PRODUTOS)
