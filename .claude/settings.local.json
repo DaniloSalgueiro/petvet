@@ -34,7 +34,10 @@
       "Bash(node -e \"const b = require\\('./src/data/bulario.js'\\); console.log\\('entries:', b.BULARIO_INICIAL?.length\\)\")",
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(JSON.stringify\\(Object.keys\\({...p.dependencies,...p.devDependencies}\\)\\)\\)\")",
       "Bash(sort -t b -k2 -n)",
-      "Bash(node scripts/check-bulario.mjs)"
+      "Bash(node scripts/check-bulario.mjs)",
+      "Bash(grep -n \"petvet-vendas\\\\|setVendas\\\\|id: \\\\`v\\\\|vendas.push\\\\|const venda = {\" -A 2 \"C:/Users/danilo.toledo/OneDrive - A1 Engenharia e Gerenciamento/Área de Trabalho/Danilo/PROGRAMACAO/PET/src/pages/PDV.jsx\")",
+      "Bash(grep -n \"^import\\\\|usePersistentState\\\\|^export default function\\\\|^    </div>$\\\\|^  \\)\\\\$\\\\|return \\(\" src/pages/Configuracoes.jsx)",
+      "Bash(grep -n \"{/\\\\*.*\\\\*/}\" src/pages/Configuracoes.jsx)"
     ]
   }
 }

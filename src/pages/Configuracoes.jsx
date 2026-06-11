@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { RotateCcw, Save, MessageCircle, History, Settings2, Trash2, Lock, Unlock, Calculator, AlertTriangle, Shield, ShieldOff, ShieldCheck, X } from 'lucide-react'
+import { RotateCcw, Save, MessageCircle, History, Settings2, Trash2, Lock, Unlock, Calculator, AlertTriangle, Shield, ShieldOff, ShieldCheck, X, Bell } from 'lucide-react'
 import { DEFAULT_PLANOS } from '../lib/planos'
 import { SUPORTE_KEY, DEV_LOG_KEY, getSuporteData, isSuporteAtivo, ativarSuporte, revogarSuporte } from '../lib/devAccess'
 import SSLogo from '../components/SSLogo'
@@ -204,6 +204,21 @@ function maskCNPJ(v) {
     .replace(/^(\d{2})$/, '$1.')
 }
 
+const ALERTAS_KEY = 'petvet-config-alertas'
+const DEFAULT_ALERTAS_CONFIG = {
+  antecedencias: [1, 3, 7],
+  canalSistema: true,
+  canalBanner: false,
+  canalWhatsapp: false,
+  whatsappNumero: '',
+  horario: '09:00',
+  repetirVencidas: 'Todo dia',
+}
+function loadAlertasConfig() {
+  try { return { ...DEFAULT_ALERTAS_CONFIG, ...JSON.parse(localStorage.getItem(ALERTAS_KEY) ?? '{}') } }
+  catch { return { ...DEFAULT_ALERTAS_CONFIG } }
+}
+
 
 function loadFollowupConfig() {
   try { return { ...DEFAULT_FOLLOWUP_CONFIG, ...JSON.parse(localStorage.getItem(FOLLOWUP_KEY) ?? '{}') } }
@@ -248,6 +263,8 @@ export default function ConfiguracoesPage() {
   const ssLogoInputRef = useRef(null)
   const [fiscalCfg, setFiscalCfg] = useState(loadFiscalConfig)
   const [fiscalSaved, setFiscalSaved] = useState(false)
+  const [alertasCfg, setAlertasCfg] = useState(loadAlertasConfig)
+  const [alertasSaved, setAlertasSaved] = useState(false)
   const [devTab, setDevTab] = useState('config')
   const [planosDraft, setPlanosDraft] = useState(loadPlanosDraft)
   const [planosSaved, setPlanosSaved] = useState(false)
@@ -456,6 +473,21 @@ export default function ConfiguracoesPage() {
     localStorage.setItem(FISCAL_KEY, JSON.stringify(fiscalCfg))
     setFiscalSaved(true)
     setTimeout(() => setFiscalSaved(false), 2500)
+  }
+
+  function toggleAntecedencia(dias) {
+    setAlertasCfg(c => {
+      const atual = c.antecedencias || []
+      const novo = atual.includes(dias) ? atual.filter(d => d !== dias) : [...atual, dias].sort((a, b) => a - b)
+      return { ...c, antecedencias: novo }
+    })
+  }
+
+  function handleSaveAlertas() {
+    localStorage.setItem(ALERTAS_KEY, JSON.stringify(alertasCfg))
+    window.dispatchEvent(new CustomEvent('supabase-sync', { detail: { key: ALERTAS_KEY } }))
+    setAlertasSaved(true)
+    setTimeout(() => setAlertasSaved(false), 2500)
   }
 
   function handleAtivarSuporte() {
@@ -1168,6 +1200,112 @@ export default function ConfiguracoesPage() {
           </div>
         </div>
       )}
+
+      {/* Alertas de Pagamentos */}
+      <div className="card" style={{ padding: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <Bell size={18} style={{ color: 'var(--teal)' }} />
+          <div>
+            <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)', margin: 0 }}>
+              Alertas de Pagamentos
+            </p>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>Notificações de contas a pagar e a receber</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* 1. Antecedência */}
+          <div>
+            <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 10 }}>1. Avisar com quantos dias de antecedência</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {[1, 3, 7, 15, 30].map(dias => {
+                const ativo = (alertasCfg.antecedencias || []).includes(dias)
+                return (
+                  <button key={dias} type="button" onClick={() => toggleAntecedencia(dias)}
+                    className={`btn btn-sm ${ativo ? 'btn-primary' : 'btn-outline'}`}>
+                    {dias} {dias === 1 ? 'dia' : 'dias'} antes
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 2. Canais de notificação */}
+          <div>
+            <p style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 10 }}>2. Canais de notificação</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'not-allowed', userSelect: 'none', opacity: 0.7 }}>
+                <div style={{
+                  width: 44, height: 24, borderRadius: 12,
+                  background: 'var(--teal)',
+                  position: 'relative', flexShrink: 0,
+                }}>
+                  <div style={{ position: 'absolute', top: 3, left: 23, width: 18, height: 18, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }} />
+                </div>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Sino do sistema (sempre ativo)</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                <div onClick={() => setAlertasCfg(c => ({ ...c, canalBanner: !c.canalBanner }))} style={{
+                  width: 44, height: 24, borderRadius: 12,
+                  background: alertasCfg.canalBanner ? 'var(--teal)' : 'var(--border)',
+                  position: 'relative', cursor: 'pointer', transition: 'background .2s', flexShrink: 0,
+                }}>
+                  <div style={{ position: 'absolute', top: 3, left: alertasCfg.canalBanner ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }} />
+                </div>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Banner no painel</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                <div onClick={() => setAlertasCfg(c => ({ ...c, canalWhatsapp: !c.canalWhatsapp }))} style={{
+                  width: 44, height: 24, borderRadius: 12,
+                  background: alertasCfg.canalWhatsapp ? 'var(--teal)' : 'var(--border)',
+                  position: 'relative', cursor: 'pointer', transition: 'background .2s', flexShrink: 0,
+                }}>
+                  <div style={{ position: 'absolute', top: 3, left: alertasCfg.canalWhatsapp ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }} />
+                </div>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>WhatsApp</span>
+              </label>
+
+              {alertasCfg.canalWhatsapp && (
+                <div className="form-group" style={{ marginBottom: 0, marginLeft: 54 }}>
+                  <label className="form-label">Número do WhatsApp</label>
+                  <input className="form-input" value={alertasCfg.whatsappNumero || ''}
+                    onChange={e => setAlertasCfg(c => ({ ...c, whatsappNumero: e.target.value }))}
+                    placeholder="(11) 99999-9999"/>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 3 e 4. Horário e repetição */}
+          <div className="cfg-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">3. Horário do aviso diário</label>
+              <input type="time" className="form-input" value={alertasCfg.horario || '09:00'}
+                onChange={e => setAlertasCfg(c => ({ ...c, horario: e.target.value }))}/>
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">4. Repetir aviso de contas vencidas</label>
+              <select className="form-input" value={alertasCfg.repetirVencidas || 'Todo dia'}
+                onChange={e => setAlertasCfg(c => ({ ...c, repetirVencidas: e.target.value }))}>
+                <option value="Todo dia">Todo dia</option>
+                <option value="A cada 3 dias">A cada 3 dias</option>
+                <option value="Semanalmente">Semanalmente</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="cfg-action-row" style={{ justifyContent: 'flex-end', marginTop: 8 }}>
+            {alertasSaved && (
+              <span style={{ fontSize: '0.8125rem', color: '#276749' }}>✓ Configurações de alertas salvas!</span>
+            )}
+            <button className="btn btn-primary btn-sm" onClick={handleSaveAlertas}>
+              <Save size={14} /> Salvar configurações de alertas
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Toast expiração dev */}
       {devToast && (

@@ -28,6 +28,8 @@ import RelatoriosPage from './pages/Relatorios'
 import ConfiguracoesPage from './pages/Configuracoes'
 import ContabilidadePage from './pages/Contabilidade'
 import CRMPage from './pages/CRM'
+import NotasFiscaisPage from './pages/NotasFiscais'
+import ContasPagarPage from './pages/ContasPagar'
 
 function AppShell() {
   const { user, mustChangePassword } = useAuth()
@@ -46,7 +48,7 @@ function AppShell() {
     <div className="app-shell">
       <Sidebar currentPage={currentPage} onNavigate={p => navigateTo(p)} />
       <div className="main-content">
-        <Header currentPage={currentPage} />
+        <Header currentPage={currentPage} onNavigate={p => navigateTo(p)} />
         <PageRouter page={currentPage} navParams={navParams} navigateTo={navigateTo} />
       </div>
       <MobileNav currentPage={currentPage} onNavigate={p => navigateTo(p)} />
@@ -63,6 +65,7 @@ const PAGE_NAMES = {
   funcionarios: 'Funcionários', 'prontuario-config': 'Config. Prontuário',
   racas: 'Raças', bulario: 'Bulário', relatorios: 'Relatórios',
   contabilidade: 'Contabilidade', crm: 'CRM',
+  'notas-fiscais': 'Notas Fiscais', 'contas-pagar': 'Contas a Pagar',
 }
 
 function getSsCfg() {
@@ -147,6 +150,8 @@ function PageRouter({ page, navParams, navigateTo }) {
     case 'configuracoes':     return <ConfiguracoesPage />
     case 'contabilidade':     return <ContabilidadePage />
     case 'crm':               return <CRMPage />
+    case 'notas-fiscais':     return <NotasFiscaisPage />
+    case 'contas-pagar':      return <ContasPagarPage />
     default:                  return <Dashboard navigateTo={navigateTo} />
   }
 }
@@ -181,6 +186,41 @@ export default function App() {
     loadAll()
       .then(() => window.dispatchEvent(new CustomEvent('petvet-sync', { detail: { status: 'synced' } })))
       .catch(() => window.dispatchEvent(new CustomEvent('petvet-sync', { detail: { status: 'error' } })))
+  }, [])
+
+  // Verifica contas a pagar vencidas/a vencer e dispara alertas financeiros
+  useEffect(() => {
+    const verificarVencimentos = () => {
+      const config = JSON.parse(localStorage.getItem('petvet-config-alertas') || '{}')
+      const antecedencias = config.antecedencias || [1, 3, 7]
+      const hoje = new Date()
+      const contas = JSON.parse(localStorage.getItem('petvet-contas-pagar') || '[]')
+      const alertas = []
+      contas.forEach(conta => {
+        conta.parcelas?.forEach(parcela => {
+          if (parcela.status === 'Pendente') {
+            const venc = new Date(parcela.vencimento)
+            const diffDias = Math.ceil((venc - hoje) / (1000 * 60 * 60 * 24))
+            if (diffDias < 0) {
+              alertas.push({ tipo: 'vencida', conta, parcela, diasAtraso: Math.abs(diffDias) })
+            } else if (antecedencias.includes(diffDias)) {
+              alertas.push({ tipo: 'vencendo', conta, parcela, diasRestantes: diffDias })
+            }
+          }
+        })
+      })
+      if (alertas.length > 0) {
+        localStorage.setItem('petvet-alertas-pendentes', JSON.stringify(alertas))
+        window.dispatchEvent(new CustomEvent('alertas-financeiros', { detail: alertas }))
+      } else {
+        localStorage.removeItem('petvet-alertas-pendentes')
+        window.dispatchEvent(new CustomEvent('alertas-financeiros', { detail: alertas }))
+      }
+    }
+
+    verificarVencimentos()
+    const interval = setInterval(verificarVencimentos, 60 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
   // Sincronização periódica dos dados críticos a cada 60s.

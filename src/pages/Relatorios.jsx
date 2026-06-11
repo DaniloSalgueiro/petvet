@@ -207,6 +207,7 @@ const RMETA = {
     { id:'produtos-vendidos', label:'Produtos Mais Vendidos', desc:'Ranking de produtos pelo PDV' },
     { id:'comissoes',         label:'Comissões',              desc:'Comissões estimadas por veterinário' },
     { id:'inadimplencia',     label:'Inadimplência',          desc:'Lançamentos com pagamento pendente' },
+    { id:'fluxo-caixa',       label:'Fluxo de Caixa Projetado', desc:'Previsão de entradas e saídas futuras' },
   ],
   'funcionarios': [
     { id:'folha-pagamento', label:'Folha de Pagamento',      desc:'Resumo da folha em um mês/ano' },
@@ -238,7 +239,9 @@ export default function RelatoriosPage() {
   const [funcionarios] = usePersistentState('petvet-funcionarios', [])
   const [pagamentos]   = usePersistentState('petvet-func-pagamentos', [])
   const [hospedagens]  = usePersistentState('petvet-hospedagens', HD)
-  const allData = { pets, tutores, prontuarios, agendamentos, produtos, lancamentos, vendas, funcionarios, pagamentos, hospedagens }
+  const [contasPagar]  = usePersistentState('petvet-contas-pagar', [])
+  const [contasReceber] = usePersistentState('petvet-contas-receber', [])
+  const allData = { pets, tutores, prontuarios, agendamentos, produtos, lancamentos, vendas, funcionarios, pagamentos, hospedagens, contasPagar, contasReceber }
 
   const cats = CATEGORIES.filter(c => !c.adminOnly || hasRole('admin'))
   const catObj = CATEGORIES.find(c => c.id === cat)
@@ -303,7 +306,7 @@ export default function RelatoriosPage() {
 // ── report router ─────────────────────────────────────────────────────────────
 
 function ReportView({ id, data }) {
-  const { pets, tutores, prontuarios, agendamentos, produtos, lancamentos, vendas, funcionarios, pagamentos, hospedagens } = data
+  const { pets, tutores, prontuarios, agendamentos, produtos, lancamentos, vendas, funcionarios, pagamentos, hospedagens, contasPagar, contasReceber } = data
   switch (id) {
     case 'lista-tutores':    return <RListaTutores tutores={tutores} pets={pets} />
     case 'lista-pets':       return <RListaPets pets={pets} tutores={tutores} />
@@ -334,6 +337,7 @@ function ReportView({ id, data }) {
     case 'produtos-vendidos':return <RProdutosVendidos vendas={vendas} />
     case 'comissoes':        return <RComissoes lancamentos={lancamentos} />
     case 'inadimplencia':    return <RInadimplencia lancamentos={lancamentos} />
+    case 'fluxo-caixa':      return <RFluxoCaixaProjetado contasPagar={contasPagar} contasReceber={contasReceber} />
     case 'folha-pagamento':  return <RFolha pagamentos={pagamentos} funcionarios={funcionarios} />
     case 'hist-pagamentos':  return <RHistPagamentos pagamentos={pagamentos} funcionarios={funcionarios} />
     case 'ticket-medio':     return <RTicketMedio lancamentos={lancamentos} vendas={vendas} />
@@ -907,6 +911,70 @@ function RInadimplencia({ lancamentos }) {
     <ActBar count={rows.length} onPrint={()=>printReport('Inadimplência',tblHtml(heads,tblRows)+`<p><strong>Total em aberto: ${R(total)}</strong></p>`)} onCSV={()=>exportCSV('inadimplencia',heads,tblRows)}/>
     <Tbl heads={heads} rows={tblRows} empty="Nenhum lançamento pendente."/>
     {rows.length>0 && <div style={{textAlign:'right',fontWeight:700,padding:'10px 12px',borderTop:'2px solid var(--border)',color:'#f44336'}}>Total em aberto: {R(total)}</div>}
+  </>
+}
+
+function RFluxoCaixaProjetado({ contasPagar, contasReceber }) {
+  const [f, set] = useFilters('fluxo-caixa', { periodo:'30' })
+  const hoje = today()
+  const limite = useMemo(() => {
+    const d = new Date(hoje + 'T00:00')
+    d.setDate(d.getDate() + Number(f.periodo))
+    return d.toISOString().slice(0, 10)
+  }, [hoje, f.periodo])
+
+  const { porData, semanas } = useMemo(() => {
+    const map = {}
+    const add = (data, tipo, valor) => {
+      if (!map[data]) map[data] = { entradas:0, saidas:0 }
+      map[data][tipo] += Number(valor) || 0
+    }
+    ;(contasReceber||[]).forEach(c => (c.parcelas||[]).forEach(p => {
+      if ((p.status==='Pendente'||p.status==='Vencido') && p.vencimento>=hoje && p.vencimento<=limite) add(p.vencimento,'entradas',p.valor)
+    }))
+    ;(contasPagar||[]).forEach(c => (c.parcelas||[]).forEach(p => {
+      if ((p.status==='Pendente'||p.status==='Vencido') && p.vencimento>=hoje && p.vencimento<=limite) add(p.vencimento,'saidas',p.valor)
+    }))
+    const datas = Object.keys(map).sort()
+    let acumulado = 0
+    const porData = datas.map(d => {
+      const { entradas=0, saidas=0 } = map[d]
+      acumulado += entradas - saidas
+      return { data:d, entradas, saidas, saldo:entradas-saidas, acumulado }
+    })
+    const semMap = {}
+    porData.forEach(r => {
+      const diff = Math.floor((new Date(r.data+'T00:00') - new Date(hoje+'T00:00')) / 86400000)
+      const label = `Sem ${Math.floor(diff/7)+1}`
+      if (!semMap[label]) semMap[label] = { entradas:0, saidas:0 }
+      semMap[label].entradas += r.entradas
+      semMap[label].saidas += r.saidas
+    })
+    const semanas = Object.entries(semMap).map(([label,v]) => ({ label, ...v }))
+    return { porData, semanas }
+  }, [contasPagar, contasReceber, hoje, limite])
+
+  const heads = ['Data','Entradas Previstas','Saídas Previstas','Saldo do Dia','Saldo Projetado Acumulado']
+  const tblRows = porData.map(r => [fmtD(r.data), R(r.entradas), R(r.saidas), R(r.saldo), R(r.acumulado)])
+
+  return <>
+    <Fil>
+      <Sel label="Período" value={f.periodo} onChange={e=>set('periodo',e.target.value)}>
+        <option value="30">Próximos 30 dias</option>
+        <option value="60">Próximos 60 dias</option>
+        <option value="90">Próximos 90 dias</option>
+      </Sel>
+    </Fil>
+    <ActBar count={porData.length} onPrint={()=>printReport('Fluxo de Caixa Projetado',tblHtml(heads,tblRows))} onCSV={()=>exportCSV('fluxo-caixa',heads,tblRows)}/>
+    <Tbl heads={heads} rows={tblRows} empty="Nenhuma movimentação prevista no período."/>
+    {semanas.length > 0 && (
+      <div style={{ marginTop:24 }}>
+        <p style={{ fontWeight:600, marginBottom:8 }}>Entradas previstas por semana</p>
+        <BarChart data={semanas.map(s=>({ label:s.label, value:Math.round(s.entradas) }))} color="#4CAF50" />
+        <p style={{ fontWeight:600, marginTop:16, marginBottom:8 }}>Saídas previstas por semana</p>
+        <BarChart data={semanas.map(s=>({ label:s.label, value:Math.round(s.saidas) }))} color="#f44336" />
+      </div>
+    )}
   </>
 }
 

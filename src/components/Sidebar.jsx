@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, FileText, Calendar,
   Package, Scissors, DollarSign, UserCog, LogOut, ShoppingCart, Syringe,
   Briefcase, Settings, Tag, Pill, BarChart2, Palette, Calculator, Lock, X,
-  MessageCircle,
+  MessageCircle, CreditCard,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useIdentidade } from '../context/IdentidadeContext'
@@ -23,6 +23,8 @@ const MODULE_FEATURES = {
   servicos:          ['Catálogo de serviços', 'Preços e promoções', 'Pacotes e combos'],
   pdv:               ['Ponto de venda completo', 'Emissão de recibo', 'Múltiplos meios de pagamento'],
   financeiro:        ['DRE mensal', 'Lançamentos de receitas e despesas', 'Controle de comissões'],
+  'notas-fiscais':   ['Notas fiscais de entrada e saída', 'Cálculo automático de impostos', 'Lançamento automático no Financeiro'],
+  'contas-pagar':    ['Contas a pagar e a receber', 'Parcelamento e recorrência', 'Alertas de vencimento'],
   vacinaprotocolo:   ['Protocolos de vacinação personalizados', 'Carteirinha digital do pet', 'Alertas de vencimento'],
   bulario:           ['Bulário veterinário completo', 'Busca por princípio ativo', 'Posologias e interações'],
   relatorios:        ['Relatórios gerenciais completos', 'Exportar CSV', 'Análise de desempenho'],
@@ -73,6 +75,8 @@ const NAV_ITEMS = [
   { id: 'vacinaprotocolo',  label: 'Vacinas',           icon: Syringe },
   { id: 'bulario',          label: 'Bulário',           icon: Pill },
   { id: 'financeiro',       label: 'Financeiro',        icon: DollarSign },
+  { id: 'notas-fiscais',    label: 'Notas Fiscais',     icon: FileText },
+  { id: 'contas-pagar',     label: 'Contas a Pagar',    icon: CreditCard },
   { id: 'contabilidade',    label: 'Contabilidade',     icon: Calculator },
   { id: 'crm',              label: 'CRM',               icon: Users },
   { id: 'relatorios',       label: 'Relatórios',        icon: BarChart2 },

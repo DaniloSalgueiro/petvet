@@ -12,6 +12,8 @@ export const DEV_MODULOS_BLOQUEADOS = [
   'pets',
   'prontuario',
   'financeiro',
+  'notas-fiscais',
+  'contas-pagar',
   'pdv',
   'usuarios',
   'funcionarios',
