@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react'
 import { Search, Plus, Minus, Trash2, ShoppingCart, X, Check, Printer } from 'lucide-react'
 import Modal from '../components/ui/Modal'
+import AccessDenied from '../components/ui/AccessDenied'
 import { TUTORES, PETS, PRODUTOS, SERVICOS_CATALOGO, LANCAMENTOS } from '../data/mock'
 import { normIncludes } from '../utils/normalizeText'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { useAuth } from '../context/AuthContext'
 
 const PAYMENT_METHODS = [
   { id: 'pix',     label: 'PIX' },
@@ -132,6 +134,7 @@ function buscarPreco(searchName, tipo, produtosList, tipoAtendimento = 'presenci
 }
 
 export default function PDVPage({ navigateTo }) {
+  const { hasPermission } = useAuth()
   const [tutor, setTutor] = useState(null)
   const [tutorSearch, setTutorSearch] = useState('')
   const [showTutorDropdown, setShowTutorDropdown] = useState(false)
@@ -478,6 +481,10 @@ export default function PDVPage({ navigateTo }) {
     setReceiptData(null)
   }
 
+  if (!hasPermission('pdv', 'view')) {
+    return <AccessDenied title="PDV" />
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -795,7 +802,7 @@ export default function PDVPage({ navigateTo }) {
 
               <button
                 className="btn btn-primary btn-full btn-lg"
-                disabled={!paymentMethod}
+                disabled={!paymentMethod || !hasPermission('pdv', 'edit')}
                 onClick={finalize}
               >
                 <Check size={18} /> Finalizar Venda

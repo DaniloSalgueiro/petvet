@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { Search, Plus, ChevronRight, X, Edit2, AlertCircle, Loader2, Sparkles, Trash2, Download } from 'lucide-react'
 import Modal from '../components/ui/Modal'
+import AccessDenied from '../components/ui/AccessDenied'
 import { PETS, TUTORES, AGENDAMENTOS, PRONTUARIOS, getTutorById } from '../data/mock'
 import { findVetById } from '../utils/getVeterinarios'
 import { calcularIdade } from '../utils/calcularIdade'
@@ -167,6 +168,10 @@ export default function PetsPage({ navigateTo, navParams }) {
       setShowTutorModal(false); setTutorDupWarn('')
       setShowAddPetPrompt(true)
     }
+  }
+
+  if (!hasPermission('pets', 'view')) {
+    return <AccessDenied title="Pets & Tutores" />
   }
 
   return (

@@ -27,7 +27,19 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
         console.log('[PetVet] SW registrado:', reg.scope)
-        if (navigator.serviceWorker.controller) sendManifestToSW()
+        const hadController = !!navigator.serviceWorker.controller
+        if (hadController) sendManifestToSW()
+
+        reg.update()
+
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing
+          newWorker?.addEventListener('statechange', () => {
+            if (newWorker.state === 'activated' && hadController) {
+              window.location.reload()
+            }
+          })
+        })
       })
       .catch(err => console.warn('[PetVet] SW erro:', err))
 

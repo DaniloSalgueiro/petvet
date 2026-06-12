@@ -117,6 +117,9 @@ export default function Login() {
   const cor2 = identidade.corDestaque || '#DE098D'
   const ssNome = ssCfg.nome || 'Salgueiro Systems'
 
+  const temLogoP = identidade?.logoP && identidade.logoP.length > 10
+  const temLogoS = identidade?.logoS && identidade.logoS.length > 10
+
   // Fundo suave do painel direito com cores do cliente (usa #fff fixo para não depender de var CSS)
   const rightBg = isDark
     ? 'var(--bg)'
@@ -219,22 +222,16 @@ export default function Login() {
 
             {/* Logos + nome da clínica */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                {identidade.logoP ? (
-                  <img src={identidade.logoP} alt="logo" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, flexShrink: 0 }} />
-                ) : (
-                  <div style={{ width: 64, height: 64, borderRadius: 12, background: `${cor1}22`, border: `2px solid ${cor1}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: cor1, fontSize: 26, fontWeight: 700 }}>
-                    {(identidade.nomeP.replace(/^\W+/, '') || 'E')[0].toUpperCase()}
-                  </div>
-                )}
-                {identidade.logoS ? (
-                  <img src={identidade.logoS} alt="logo2" style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 10, flexShrink: 0 }} />
-                ) : (
-                  <div style={{ width: 64, height: 64, borderRadius: 12, background: `${cor2}22`, border: `2px solid ${cor2}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: cor2, fontSize: 26, fontWeight: 700 }}>
-                    {(identidade.nomeS.replace(/^\W+/, '') || 'T')[0].toUpperCase()}
-                  </div>
-                )}
-              </div>
+              {(temLogoP || temLogoS) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  {temLogoP && (
+                    <img src={identidade.logoP} alt="logo" style={{ maxHeight: 48, width: 'auto', objectFit: 'contain', borderRadius: 10, flexShrink: 0 }} />
+                  )}
+                  {temLogoS && (
+                    <img src={identidade.logoS} alt="logo2" style={{ maxHeight: 48, width: 'auto', objectFit: 'contain', borderRadius: 10, flexShrink: 0 }} />
+                  )}
+                </div>
+              )}
               <div>
                 <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)', fontFamily: "'Playfair Display', serif" }}>{identidade.nomeP}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{identidade.nomeS}</div>

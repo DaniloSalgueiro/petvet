@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Search, Clock, DollarSign, Trash2 } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import Modal from '../components/ui/Modal'
+import AccessDenied from '../components/ui/AccessDenied'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { SERVICOS_CATALOGO, HOSPEDAGENS, AGENDAMENTOS, PETS, TUTORES, getPetById, getTutorById } from '../data/mock'
 import { useAuth } from '../context/AuthContext'
@@ -142,6 +143,10 @@ export default function ServicosPage() {
     { id: 'domicilio', label: '🏠 Domicílio', count: domicilio.length },
     { id: 'hospedagem',label: 'Hospedagem',   count: hospAtivas.length },
   ]
+
+  if (!hasPermission('servicos', 'view')) {
+    return <AccessDenied title="Serviços" />
+  }
 
   return (
     <div className="page">

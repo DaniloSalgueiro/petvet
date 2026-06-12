@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, Search, AlertTriangle, X, Package, Trash2, Download } from 'lucide-react'
 import Modal from '../components/ui/Modal'
+import AccessDenied from '../components/ui/AccessDenied'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import CropModal from '../components/ui/CropModal'
 import PhotoUploadButtons from '../components/ui/PhotoUploadButtons'
@@ -108,6 +109,10 @@ export default function EstoquePage() {
   const totalItens = produtos.reduce((s, p) => s + p.quantity, 0)
   const expiringSoon = produtos.filter(p => getDaysUntilExpiry(p.expiryDate) <= 30).length
   const belowMin = produtos.filter(p => p.quantity <= p.minStock).length
+
+  if (!hasPermission('estoque', 'view')) {
+    return <AccessDenied title="Estoque" />
+  }
 
   return (
     <div className="page">

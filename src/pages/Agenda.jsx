@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Trash2, AlertTriangle, X } from 'lucide-react'
 import Modal from '../components/ui/Modal'
+import AccessDenied from '../components/ui/AccessDenied'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import EnderecoFields from '../components/ui/EnderecoFields'
 import MapaModal from '../components/ui/MapaModal'
@@ -378,6 +379,10 @@ export default function AgendaPage({ navParams = {} }) {
       count={monthApts.length}
     />
   )
+
+  if (!hasPermission('agenda', 'view')) {
+    return <AccessDenied title="Agenda" />
+  }
 
   return (
     <div className="page">

@@ -4,6 +4,7 @@ import {
   MoreHorizontal, FileText, Package, Scissors,
   DollarSign, Syringe, Pill, BarChart2, Calculator,
   UserCog, Briefcase, Tag, Settings, Palette, X, LogOut,
+  CreditCard,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -19,6 +20,8 @@ const MORE_NAV = [
   { id: 'estoque',         label: 'Estoque',    icon: Package },
   { id: 'servicos',        label: 'Serviços',   icon: Scissors },
   { id: 'financeiro',      label: 'Financeiro',   icon: DollarSign },
+  { id: 'notas-fiscais',   label: 'Notas Fiscais',icon: FileText },
+  { id: 'contas-pagar',    label: 'Contas a Pagar',icon: CreditCard },
   { id: 'contabilidade',   label: 'Contabilidade',icon: Calculator },
   { id: 'crm',             label: 'CRM',          icon: Users },
   { id: 'vacinaprotocolo', label: 'Vacinas',      icon: Syringe },

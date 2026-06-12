@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, TrendingUp, TrendingDown, DollarSign, Search, Settings, Trash2, Download } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
 import Modal from '../components/ui/Modal'
+import AccessDenied from '../components/ui/AccessDenied'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import { LANCAMENTOS } from '../data/mock'
 import { useAuth } from '../context/AuthContext'
@@ -123,6 +124,10 @@ export default function FinanceiroPage() {
     { id: 'lancamentos',label: 'Lançamentos', count: lancamentos.length },
     { id: 'comissoes',  label: 'Comissões' },
   ]
+
+  if (!hasPermission('financeiro', 'view')) {
+    return <AccessDenied title="Financeiro" />
+  }
 
   return (
     <div className="page">

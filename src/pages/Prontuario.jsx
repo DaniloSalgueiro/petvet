@@ -1,6 +1,7 @@
 ﻿import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { Plus, Search, FileText, Printer, ChevronRight, ChevronDown, X } from 'lucide-react'
 import Tabs from '../components/ui/Tabs'
+import AccessDenied from '../components/ui/AccessDenied'
 import corpImg from '../assets/corpo.jpg'
 import { PRONTUARIOS, PETS, TUTORES, PRODUTOS, getPetById, getTutorById, AGENDAMENTOS } from '../data/mock'
 import { getVeterinarios, findVetById } from '../utils/getVeterinarios'
@@ -705,6 +706,11 @@ function DermaCanvas({ value, onChange, disabled }) {
 
 export default function ProntuarioPage({ navParams = {} }) {
   const { user, hasRole, hasPermission } = useAuth()
+
+  if (!hasPermission('prontuario', 'view')) {
+    return <AccessDenied title="Prontuários" />
+  }
+
   const vets = getVeterinarios()
   const [prontuarios, setProntuarios] = usePersistentState('petvet-prontuarios', PRONTUARIOS)
   const [prontuarioConfig, setProntuarioConfig] = usePersistentState('petvet-prontuario-config', DEFAULT_PRONTUARIO_CONFIG)

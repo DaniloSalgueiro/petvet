@@ -191,6 +191,8 @@ function UpgradeModal({ moduleId, label, minPlan, ssWhatsapp, onClose }) {
 export default function Sidebar({ currentPage, onNavigate }) {
   const { user, logout, hasRole, isDevMode, hasPermission } = useAuth()
   const { identidade } = useIdentidade()
+  const temLogoP = identidade?.logoP && identidade.logoP.length > 10
+  const temLogoS = identidade?.logoS && identidade.logoS.length > 10
 
   const [ssNome,      setSsNome]      = useState(loadSsNome)
   const [ssPlano,     setSsPlano]     = useState(loadSsPlano)
@@ -247,19 +249,11 @@ export default function Sidebar({ currentPage, onNavigate }) {
         <div className="sidebar-logo">
           <div className="sidebar-logo-mark">
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:5, flexShrink:0 }}>
-              {identidade.logoP ? (
-                <img src={identidade.logoP} alt="" style={{ width:32, height:32, objectFit:'contain', borderRadius:6, flexShrink:0 }} />
-              ) : (
-                <div style={{ width:32, height:32, borderRadius:6, background:`${identidade.corPrimaria}22`, border:`1.5px solid ${identidade.corPrimaria}`, display:'flex', alignItems:'center', justifyContent:'center', color:identidade.corPrimaria, fontWeight:700, fontSize:14, flexShrink:0 }}>
-                  {(identidade.nomeP.replace(/^\W+/, '') || 'E')[0].toUpperCase()}
-                </div>
+              {temLogoP && (
+                <img src={identidade.logoP} alt="" style={{ maxHeight:32, width:'auto', objectFit:'contain', borderRadius:6, flexShrink:0 }} />
               )}
-              {identidade.logoS ? (
-                <img src={identidade.logoS} alt="" style={{ width:32, height:32, objectFit:'contain', borderRadius:6, flexShrink:0 }} />
-              ) : (
-                <div style={{ width:32, height:32, borderRadius:6, background:`${identidade.corDestaque}22`, border:`1.5px solid ${identidade.corDestaque}`, display:'flex', alignItems:'center', justifyContent:'center', color:identidade.corDestaque, fontWeight:700, fontSize:14, flexShrink:0 }}>
-                  {(identidade.nomeS.replace(/^\W+/, '') || 'T')[0].toUpperCase()}
-                </div>
+              {temLogoS && (
+                <img src={identidade.logoS} alt="" style={{ maxHeight:32, width:'auto', objectFit:'contain', borderRadius:6, flexShrink:0 }} />
               )}
             </div>
             <div className="sidebar-logo-text">

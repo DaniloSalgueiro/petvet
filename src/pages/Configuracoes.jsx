@@ -1998,19 +1998,11 @@ function SidebarPreview({ draft }) {
       {/* Logo area */}
       <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          {draft.logoP ? (
-            <img src={draft.logoP} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: `${draft.corPrimaria}22`, border: `1.5px solid ${draft.corPrimaria}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: draft.corPrimaria, fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
-              {(draft.nomeP.replace(/^\W+/, '') || 'E')[0].toUpperCase()}
-            </div>
+          {draft.logoP && (
+            <img src={draft.logoP} alt="" style={{ maxHeight: 28, width: 'auto', objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
           )}
-          {draft.logoS ? (
-            <img src={draft.logoS} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: `${draft.corDestaque}22`, border: `1.5px solid ${draft.corDestaque}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: draft.corDestaque, fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
-              {(draft.nomeS.replace(/^\W+/, '') || 'T')[0].toUpperCase()}
-            </div>
+          {draft.logoS && (
+            <img src={draft.logoS} alt="" style={{ maxHeight: 28, width: 'auto', objectFit: 'contain', borderRadius: 6, flexShrink: 0 }} />
           )}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -2061,19 +2053,11 @@ function LoginPreview({ draft }) {
       {/* Logo + nome */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          {draft.logoP ? (
-            <img src={draft.logoP} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: `${draft.corPrimaria}22`, border: `2px solid ${draft.corPrimaria}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: draft.corPrimaria, fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
-              {(draft.nomeP.replace(/^\W+/, '') || 'E')[0].toUpperCase()}
-            </div>
+          {draft.logoP && (
+            <img src={draft.logoP} alt="" style={{ maxHeight: 38, width: 'auto', objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
           )}
-          {draft.logoS ? (
-            <img src={draft.logoS} alt="" style={{ width: 38, height: 38, objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
-          ) : (
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: `${draft.corDestaque}22`, border: `2px solid ${draft.corDestaque}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: draft.corDestaque, fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
-              {(draft.nomeS.replace(/^\W+/, '') || 'T')[0].toUpperCase()}
-            </div>
+          {draft.logoS && (
+            <img src={draft.logoS} alt="" style={{ maxHeight: 38, width: 'auto', objectFit: 'contain', borderRadius: 8, flexShrink: 0 }} />
           )}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>

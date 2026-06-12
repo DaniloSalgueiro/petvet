@@ -4,6 +4,7 @@ import { maskCPF, maskPhone } from '../utils/masks'
 import Modal from '../components/ui/Modal'
 import ConfirmModal from '../components/ui/ConfirmModal'
 import Tabs from '../components/ui/Tabs'
+import AccessDenied from '../components/ui/AccessDenied'
 import { USUARIOS, ATIVIDADES, getUserById } from '../data/mock'
 import { useAuth, markUserDeleted } from '../context/AuthContext'
 import { usePersistentState } from '../hooks/usePersistentState'
@@ -21,6 +22,7 @@ const MODULE_LABELS = {
   agenda:               'Agenda',
   estoque:              'Estoque',
   servicos:             'Serviços',
+  pdv:                  'PDV',
   financeiro:           'Financeiro',
   'notas-fiscais':      'Notas Fiscais',
   'contas-pagar':       'Contas a Pagar',
@@ -45,6 +47,7 @@ const DEFAULT_PERMISSIONS = {
     agenda:              P(true,  true,  false),
     estoque:             P(true,  false, false),
     servicos:            P(true,  false, false),
+    pdv:                 P(false, false, false),
     financeiro:          P(false, false, false),
     'notas-fiscais':     P(false, false, false),
     'contas-pagar':      P(false, false, false),
@@ -65,6 +68,7 @@ const DEFAULT_PERMISSIONS = {
     agenda:               P(true,  true,  false),
     estoque:              P(true,  true,  false),
     servicos:             P(true,  true,  false),
+    pdv:                  P(true,  true,  false),
     financeiro:           P(false, false, false),
     'notas-fiscais':      P(false, false, false),
     'contas-pagar':       P(false, false, false),
@@ -94,20 +98,7 @@ export default function UsuariosPage() {
   const { user: currentUser, hasRole, hasPermission, resetPassword } = useAuth()
 
   if (!hasPermission('usuarios', 'view')) {
-    return (
-      <div className="page">
-        <div className="page-header">
-          <h2 className="page-title">Gestão de Usuários</h2>
-        </div>
-        <div className="card" style={{ textAlign: 'center', padding: '64px 24px' }}>
-          <Shield size={40} style={{ color: 'var(--text-muted)', margin: '0 auto 16px' }} />
-          <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Acesso restrito</p>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 6 }}>
-            Você não tem permissão para acessar este módulo.
-          </p>
-        </div>
-      </div>
-    )
+    return <AccessDenied title="Gestão de Usuários" />
   }
 
   const [rawUsuarios, setRawUsuarios] = usePersistentState('petvet-usuarios', USUARIOS)
